@@ -177,26 +177,20 @@ textarea:focus{border-color:var(--primary)}
 .itinerary-day{border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px;background:#fafbfc}
 .itinerary-day .day-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
 .itinerary-day .day-head strong{font-size:15px;color:var(--primary)}
-.it-cat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
-.it-cat-section{border-radius:8px;padding:10px 12px;border:1px solid var(--border);background:#fff;transition:box-shadow .2s}
-.it-cat-section:hover{box-shadow:0 2px 8px rgba(0,0,0,.06)}
-.it-cat-section.cat-meal{border-left:4px solid #f59e0b;background:#fffbeb}
-.it-cat-section.cat-hotel{border-left:4px solid #3b82f6;background:#eff6ff}
-.it-cat-section.cat-ticket{border-left:4px solid #10b981;background:#ecfdf5}
-.it-cat-section.cat-transport{border-left:4px solid #8b5cf6;background:#f5f3ff}
-.it-cat-title{font-size:13px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:5px;color:#374151}
-.it-cat-title svg{width:15px;height:15px;flex-shrink:0}
-.it-cat-title.cat-meal{color:#b45309}
-.it-cat-title.cat-hotel{color:#1d4ed8}
-.it-cat-title.cat-ticket{color:#059669}
-.it-cat-title.cat-transport{color:#6d28d9}
-.it-cat-row{display:grid;grid-template-columns:42px 1fr;gap:6px;align-items:center;margin-bottom:6px}
-.it-cat-row:last-child{margin-bottom:0}
+.it-cat-stack{display:flex;flex-direction:column;gap:12px;margin-top:12px}
+.it-cat-section{padding:0}
+.it-cat-title{font-size:14px;font-weight:600;margin-bottom:6px;color:var(--text)}
+.it-cat-row{display:grid;grid-template-columns:42px 1fr;gap:6px;align-items:center}
 .it-cat-row label{font-size:12px;font-weight:600;color:#6b7280;text-align:right}
 .it-cat-row select{font-size:13px;padding:0 8px;height:42px;box-sizing:border-box;background:#fff}
 .it-cat-row.ticket-row{grid-template-columns:42px 1fr 28px}
-.btn-add-ticket{margin-top:6px;font-size:12px;padding:3px 10px}
+.meal-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.meal-item{display:flex;flex-direction:column}
+.meal-item label{font-size:12px;font-weight:600;color:#6b7280;margin-bottom:4px}
+.meal-item select{font-size:13px;padding:0 8px;height:42px;box-sizing:border-box;background:#fff}
+.add-ticket{margin-top:6px;text-align:right}
 .ticket-list{margin-bottom:2px}
+.it-desc-group{margin-top:12px}
 /* Itinerary display (view mode) */
 .it-display-cat{display:inline-flex;align-items:center;gap:4px;font-size:12px;padding:3px 10px;border-radius:12px;margin:2px 4px 2px 0;font-weight:600}
 .it-display-cat.cat-meal{background:#fef3c7;color:#92400e}
@@ -208,6 +202,7 @@ textarea:focus{border-color:var(--primary)}
 .transport-editor .transport-row{display:flex;gap:6px;align-items:center;margin-bottom:6px}
 .transport-editor .transport-row:last-child{margin-bottom:0}
 .transport-editor .transport-row .transport-type{flex:0 0 130px;width:130px}
+.transport-editor .transport-row .transport-segment{flex:0 0 110px;width:110px}
 .transport-editor .transport-row .transport-sel{flex:1}
 /* 交通安排下拉兜底白底（不在 .form-group 内，避免深色主题下原生 select 变黑底） */
 .transport-editor select{width:100%;height:42px;padding:0 12px;box-sizing:border-box;background:#fff;color:var(--text);border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit}
@@ -1113,7 +1108,7 @@ html+='<div class="form-row"><div class="form-group"><label>参考价(元/人)</
 html+='<div class="form-group"><label>行程安排</label><div id="itineraryEditor"></div><button type="button" class="btn btn-sm btn-add" data-action="add-itinerary-day">'+ICONS.plus+' 添加行程日</button></div>';
 openModal((t?'编辑':'新建')+'团期信息',html,'<button class="btn btn-primary" data-action="save-tour" data-id="'+(id||'')+'">保存</button><button class="btn btn-secondary" data-action="close-modal">取消</button>',true);
 var tEditor=$('transportEditor');
-if(t&&t.transportSupplierIds&&t.transportSupplierIds.length){t.transportSupplierIds.forEach(function(idv){tEditor.appendChild(createTransportBlock(idv))})}else{tEditor.appendChild(createTransportBlock(null))}
+if(t&&t.transportSupplierIds&&t.transportSupplierIds.length){t.transportSupplierIds.forEach(function(idv,i){tEditor.appendChild(createTransportBlock(idv,(t.transportSegments&&t.transportSegments[i])||''))})}else{tEditor.appendChild(createTransportBlock(null))}
 var editor=$('itineraryEditor');
 if(t&&t.itinerary){t.itinerary.forEach(function(d){editor.appendChild(createDayBlock(d))})}else{editor.appendChild(createDayBlock(null))};updateDayNumbers();updateAddDayBtn();
   ['tf_departureDate','tf_sendOffTime'].forEach(function(idv){var el=$(''+idv);if(el)el.addEventListener('input',recalcTourDuration)});
@@ -1126,17 +1121,18 @@ div.className='itinerary-day';
 var html='<div class="day-head"><strong>第 <span class="day-num">1</span> 天</strong><button type="button" class="btn-icon" data-action="remove-itinerary-day">'+ICONS.del+'</button></div>';
 var _itdId=genId('itd');
 html+='<div class="form-row"><div class="form-group"><label>日期</label><input type="hidden" class="it-date" id="'+_itdId+'" value="'+esc(data.date||'')+'"><input type="text" readonly class="date-picker" id="'+_itdId+'_view" data-target="'+_itdId+'" value="'+fmtDateCn(data.date||'')+'" placeholder="请选择行程日期"></div><div class="form-group"><label>行程标题</label><input type="text" class="it-title" value="'+esc(data.title||'')+'"></div></div>';
-html+='<div class="form-group"><label>行程描述</label><textarea class="it-desc" rows="2">'+esc(data.description||'')+'</textarea></div>';
-html+='<div class="it-cat-grid">';
-html+='<div class="it-cat-section cat-meal"><div class="it-cat-title cat-meal">'+ICONS.meal+'餐饮安排</div>';
-html+='<div class="it-cat-row"><label>早餐</label><select class="meal-sel" data-meal="breakfast">'+supplierOptions('餐厅',data.breakfastSupplierId)+'</select></div>';
-html+='<div class="it-cat-row"><label>中餐</label><select class="meal-sel" data-meal="lunch">'+supplierOptions('餐厅',data.lunchSupplierId)+'</select></div>';
-html+='<div class="it-cat-row"><label>晚餐</label><select class="meal-sel" data-meal="dinner">'+supplierOptions('餐厅',data.dinnerSupplierId)+'</select></div>';
+html+='<div class="it-cat-stack">';
+html+='<div class="it-cat-section"><div class="it-cat-title">餐饮安排</div>';
+html+='<div class="meal-row">';
+html+='<div class="meal-item"><label>早餐</label><select class="meal-sel" data-meal="breakfast">'+supplierOptions('餐厅',data.breakfastSupplierId)+'</select></div>';
+html+='<div class="meal-item"><label>中餐</label><select class="meal-sel" data-meal="lunch">'+supplierOptions('餐厅',data.lunchSupplierId)+'</select></div>';
+html+='<div class="meal-item"><label>晚餐</label><select class="meal-sel" data-meal="dinner">'+supplierOptions('餐厅',data.dinnerSupplierId)+'</select></div>';
 html+='</div>';
-html+='<div class="it-cat-section cat-hotel"><div class="it-cat-title cat-hotel">'+ICONS.hotel+'住宿安排</div>';
+html+='</div>';
+html+='<div class="it-cat-section"><div class="it-cat-title">住宿安排</div>';
 html+='<div class="it-cat-row"><label>酒店</label><select class="meal-sel" data-type="hotel">'+supplierOptions('酒店',data.hotelSupplierId)+'</select></div>';
 html+='</div>';
-html+='<div class="it-cat-section cat-ticket"><div class="it-cat-title cat-ticket">'+ICONS.ticket+'景区门票</div>';
+html+='<div class="it-cat-section"><div class="it-cat-title">景区门票</div>';
 html+='<div class="ticket-list">';
 var tIds=data.ticketSupplierIds||(data.ticketSupplierId?[data.ticketSupplierId]:['']);
 if(!tIds.length)tIds=[''];
@@ -1144,19 +1140,22 @@ tIds.forEach(function(tid){
 html+='<div class="it-cat-row ticket-row"><label>景区</label><select class="meal-sel" data-type="ticket">'+supplierOptions('景区',tid)+'</select><button type="button" class="btn-icon" data-action="remove-ticket" title="删除景区">'+ICONS.del+'</button></div>';
 });
 html+='</div>';
-html+='<div style="text-align:right;margin-top:6px"><button type="button" class="btn btn-sm btn-add" data-action="add-ticket">'+ICONS.plus+' 添加景区</button></div>';
+html+='<div class="add-ticket"><button type="button" class="btn btn-sm btn-add" data-action="add-ticket">'+ICONS.plus+' 添加景区</button></div>';
 html+='</div>';
+html+='</div>';
+html+='<div class="form-group it-desc-group"><label>行程描述</label><textarea class="it-desc" rows="2">'+esc(data.description||'')+'</textarea></div>';
 html+='</div>';
 div.innerHTML=html;return div}
 function transportTypeOptions(selected){var types=['航空交通','铁路交通','汽车交通'];var html='<option value="">-- 选择类型 --</option>';types.forEach(function(t){html+='<option value="'+t+'"'+(t===selected?' selected':'')+'>'+t+'</option>'});return html}
-function createTransportBlock(sel){
+function transportSegmentOptions(selected){var segs=['去程','返程','全程'];var html='<option value="">-- 行程段 --</option>';segs.forEach(function(s){html+='<option value="'+s+'"'+(s===selected?' selected':'')+'>'+s+'</option>'});return html}
+function createTransportBlock(sel,seg){
 var div=document.createElement('div');
 div.className='transport-row';
 var _sup=sel?getSupplier(sel):null;
 var _type=_sup?_sup.type:'';
-div.innerHTML='<select class="transport-type" data-role="ttype" data-no-searchbox>'+transportTypeOptions(_type)+'</select><select class="meal-sel transport-sel" data-type="transport" data-force-search>'+supplierOptions(_type||[],sel||'')+'</select><button type="button" class="btn-icon" data-action="remove-transport" title="删除交通方式">'+ICONS.del+'</button>';
-var typeSel=div.querySelector('.transport-type');
-var supSel=div.querySelector('.transport-sel');
+div.innerHTML='<select class="transport-type" data-role="ttype" data-no-searchbox>'+transportTypeOptions(_type)+'</select><select class="transport-segment" data-role="tsegment" data-no-searchbox>'+transportSegmentOptions(seg)+'</select><select class="meal-sel transport-sel" data-type="transport" data-force-search>'+supplierOptions(_type||[],sel||'')+'</select><button type="button" class="btn-icon" data-action="remove-transport" title="删除交通方式">'+ICONS.del+'</button>';
+var typeSel=div.querySelector('select.transport-type');
+var supSel=div.querySelector('select.transport-sel');
 typeSel.addEventListener('change',function(){supSel.innerHTML=supplierOptions(typeSel.value||[],'')});
 return div}
 function updateDayNumbers(){var blocks=document.querySelectorAll('#itineraryEditor .itinerary-day');blocks.forEach(function(b,i){var span=b.querySelector('.day-num');if(span)span.textContent=i+1})}
@@ -1168,7 +1167,10 @@ function saveTour(id){
 var t=id?getTourGroup(id):null;
 var tourNo=$('tf_tourNo').value.trim();var routeName=$('tf_routeName').value.trim();
 if(!tourNo||!routeName){showToast('团号和线路名称不能为空','error');return}
-var data={tourNo:tourNo,routeName:routeName,departureDate:$('tf_departureDate').value,duration:parseInt($('tf_duration').value)||1,price:parseFloat($('tf_price').value)||0,maxPax:parseInt($('tf_maxPax').value)||30,insuranceSupplierId:$('tf_insuranceSupplierId').value,recruitClosed:t?t.recruitClosed:false,guideId:$('tf_guideId').value,leaderId:$('tf_leaderId').value,fullGuideId:$('tf_fullGuideId').value,sendOffTime:$('tf_sendOffTime').value,transportSupplierIds:Array.from(document.querySelectorAll('#transportEditor .transport-sel')).map(function(sel){return sel.value}).filter(function(v){return v}),itinerary:collectItinerary()};
+var _trows=Array.from(document.querySelectorAll('#transportEditor .transport-row'));
+var _tids=[],_tsegs=[];
+_trows.forEach(function(row){var s=row.querySelector('select.transport-sel');var v=s?s.value:'';if(v){_tids.push(v);var seg=row.querySelector('select.transport-segment');_tsegs.push(seg?seg.value:'')}});
+var data={tourNo:tourNo,routeName:routeName,departureDate:$('tf_departureDate').value,duration:parseInt($('tf_duration').value)||1,price:parseFloat($('tf_price').value)||0,maxPax:parseInt($('tf_maxPax').value)||30,insuranceSupplierId:$('tf_insuranceSupplierId').value,recruitClosed:t?t.recruitClosed:false,guideId:$('tf_guideId').value,leaderId:$('tf_leaderId').value,fullGuideId:$('tf_fullGuideId').value,sendOffTime:$('tf_sendOffTime').value,transportSupplierIds:_tids,transportSegments:_tsegs,itinerary:collectItinerary()};
 if(id){Object.assign(t,data);showToast('团期已更新','success')}
 else{data.id=genId('t');data.createdBy=currentUser.id;DB.tourGroups.push(data);showToast('团期已创建','success')}
 var _tgId=id||data.id,_newDep=data.departureDate;(DB.orders||[]).forEach(function(o){if(o.tourGroupId===_tgId)o.departureDate=_newDep});saveData();closeModal();renderTour()}
@@ -1187,7 +1189,7 @@ html+='<div class="form-row"><div class="form-group"><label>出发时间</label>
 html+='<div class="form-group"><label>导游</label><div style="padding:8px 0">'+esc(guideNameOrNone(t.guideId))+'</div></div>';
 html+='<div class="form-row"><div class="form-group"><label>领队</label><div style="padding:8px 0">'+esc(guideNameOrNone(t.leaderId))+'</div></div><div class="form-group"><label>全陪</label><div style="padding:8px 0">'+esc(guideNameOrNone(t.fullGuideId))+'</div></div></div>';
 var _tids=t.transportSupplierIds||[];
-html+='<div class="form-group"><label>交通安排</label>'+(function(){if(!_tids.length)return '<div style="padding:8px 0">--</div>';var rows=_tids.map(function(id){var s=getSupplier(id);if(!s)return '';return '<div class="tp-row"><span class="tp-type">'+esc(s.type)+'</span><span class="tp-data">'+ICONS.bus+esc(getSupplierInfo(id))+'</span></div>'}).join('');return '<div class="tp-list">'+rows+'</div>'}())+'</div>';
+html+='<div class="form-group"><label>交通安排</label>'+(function(){if(!_tids.length)return '<div style="padding:8px 0">--</div>';var rows=_tids.map(function(id,i){var s=getSupplier(id);if(!s)return '';var seg=(t.transportSegments&&t.transportSegments[i])||'';return '<div class="tp-row"><span class="tp-type">'+esc(s.type)+(seg?' · '+esc(seg):'')+'</span><span class="tp-data">'+ICONS.bus+esc(getSupplierInfo(id))+'</span></div>'}).join('');return '<div class="tp-list">'+rows+'</div>'}())+'</div>';
 if(t.itinerary&&t.itinerary.length>0){html+='<div class="plan-section"><h3>行程安排</h3>';
 t.itinerary.forEach(function(d){html+='<div class="itinerary-day" style="background:#fafbfc"><div class="day-head"><strong>第'+esc(d.day)+'天 ('+fmtDateCn(d.date)+')</strong><span>'+esc(d.title)+'</span></div>';
 html+='<p style="font-size:13px;color:var(--text-light);margin:6px 0 8px">'+esc(d.description)+'</p>';
@@ -2670,7 +2672,7 @@ html+='<tr><td style="background:#f8fafc">导游</td><td>'+esc(getGuideName(tg.g
 html+='</tbody></table></div></div>';
 var _ptids=tg.transportSupplierIds||[];
 if(_ptids.length>0){html+='<div class="plan-section"><h3>交通安排</h3><div class="tp-list">';
-_ptids.forEach(function(id){var s=getSupplier(id);if(!s)return;html+='<div class="tp-row"><span class="tp-type">'+esc(s.type)+'</span><span class="tp-data">'+ICONS.bus+esc(getSupplierInfo(id))+'</span></div>'});
+_ptids.forEach(function(id,i){var s=getSupplier(id);if(!s)return;var seg=(tg.transportSegments&&tg.transportSegments[i])||'';html+='<div class="tp-row"><span class="tp-type">'+esc(s.type)+(seg?' · '+esc(seg):'')+'</span><span class="tp-data">'+ICONS.bus+esc(getSupplierInfo(id))+'</span></div>'});
 html+='</div></div>'}
 if(allMembers.length>0){html+='<div class="plan-section"><h3>游客名单表（汇总 '+allMembers.length+' 人 / 总 '+totalPax+' 人）</h3><div class="table-wrap"><table><thead><tr><th>序号</th><th>来源订单</th><th>姓名</th><th>游客类型</th><th>性别</th><th>年龄</th><th>证件号码</th><th>联系电话</th><th>备注</th></tr></thead><tbody>';
 allMembers.forEach(function(m,i){html+='<tr><td>'+(i+1)+'</td><td>'+esc(getOrderNo(m._oid))+'</td><td>'+esc(m.name)+'</td><td>'+esc(m.travelerType||'成人')+'</td><td>'+esc(m.gender)+'</td><td>'+esc(m.age)+'</td><td style="font-size:12px">'+esc(m.idNumber)+'</td><td>'+esc(m.phone)+'</td><td>'+(m.remark?esc(m.remark):'占床')+'</td></tr>'});
@@ -2835,7 +2837,7 @@ html+='</div>';
 /* 交通安排（取自团期，整团统一） */
 html+='<div class="tc-block allow-break"><div class="tc-block-head">二、交通安排</div><div class="tc-block-body full">';
 var _trs=tg.transportSupplierIds||[];
-if(_trs.length){html+='<table class="tc-table tc-transport"><tbody>'+_trs.map(function(id){var s=getSupplier(id);if(!s)return '';var v=getVehicleInfo(s);return '<tr><th class="tp-type-cell">'+esc(s.type)+'</th><td>'+ICONS.bus+esc(s.name)+(s.productName?(' '+esc(s.productName)):'')+(v?(' · '+esc(v)):'')+'</td></tr>'}).join('')+'</tbody></table>'}
+if(_trs.length){html+='<table class="tc-table tc-transport"><tbody>'+_trs.map(function(id,i){var s=getSupplier(id);if(!s)return '';var seg=(tg.transportSegments&&tg.transportSegments[i])||'';var v=getVehicleInfo(s);return '<tr><th class="tp-type-cell">'+esc(s.type)+(seg?' · '+esc(seg):'')+'</th><td>'+ICONS.bus+esc(s.name)+(s.productName?(' '+esc(s.productName)):'')+(v?(' · '+esc(v)):'')+'</td></tr>'}).join('')+'</tbody></table>'}
 else{html+='<div class="tc-empty">该团期尚未设置交通安排，请先在「行程管理」中完善后重新生成</div>'}
 html+='</div></div>';
 /* 二 */
@@ -3083,7 +3085,7 @@ case'delete-tour':deleteTour(id);break;
 case'add-itinerary-day':$('itineraryEditor').appendChild(createDayBlock(null));updateDayNumbers();updateAddDayBtn();break;
 case'remove-itinerary-day':el.closest('.itinerary-day').remove();updateDayNumbers();updateAddDayBtn();break;
 case'add-transport':$('transportEditor').appendChild(createTransportBlock(null));break;
-case'remove-transport':if(el.closest('.transport-editor').querySelectorAll('.transport-row').length>1){el.closest('.transport-row').remove()}else{var _ts=el.closest('.transport-row').querySelector('.transport-sel');if(_ts)_ts.value=''};break;
+case'remove-transport':if(el.closest('.transport-editor').querySelectorAll('.transport-row').length>1){el.closest('.transport-row').remove()}else{var _ts=el.closest('.transport-row').querySelector('select.transport-sel');if(_ts)_ts.value=''};break;
 case'add-ticket':addTicketRow(el);break;
 case'remove-ticket':removeTicketRow(el);break;
 case'new-order':showOrderForm(null);break;
