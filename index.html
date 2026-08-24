@@ -206,6 +206,14 @@ textarea:focus{border-color:var(--primary)}
 .transport-editor .transport-row .transport-sel{flex:1}
 /* 交通安排下拉兜底白底（不在 .form-group 内，避免深色主题下原生 select 变黑底） */
 .transport-editor select{width:100%;height:42px;padding:0 12px;box-sizing:border-box;background:#fff;color:var(--text);border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit}
+/* 交通安排 - 所选航空/铁路供应商的扩展信息（只读，自动带出） */
+.transport-editor .transport-block{margin-bottom:10px}
+.transport-editor .transport-block:last-child{margin-bottom:0}
+.transport-extra{margin-top:4px;padding:6px 10px;background:#f8fafc;border:1px dashed var(--border);border-radius:6px;font-size:12px;color:var(--text-light);line-height:1.7}
+.transport-extra:empty{display:none}
+.transport-extra-label{margin-right:8px;color:var(--text);font-weight:600}
+.transport-extra-item{margin-right:14px;white-space:nowrap}
+.transport-extra-hint{color:var(--warning);font-size:12px}
 /* 团期交通安排展示（两列：类型 | 交通数据） */
 .tp-list{margin:2px 0}
 .tp-row{display:flex;gap:12px;align-items:baseline;padding:5px 0;border-bottom:1px dashed var(--border)}
@@ -770,7 +778,8 @@ function getSupplierName(id){var s=getSupplier(id);return s?s.name:'--'}
 function getSupplierInfo(id){var s=getSupplier(id);if(!s)return'';var info=s.name;if(s.productName)info+=' ['+s.productName;if(s.unitPrice)info+=' 成人¥'+s.unitPrice+'/'+getSupplierUnit(s.type);if(s.type==='景区'&&s.discountPrice!=null)info+=' 优惠¥'+(s.discountPrice||0);if(s.productName)info+=']';return info}
 function getVehicleInfo(s){if(!s||s.type!=='汽车交通')return'';var parts=[];if(s.plateNumber)parts.push('车牌：'+s.plateNumber);if(s.driverName)parts.push('司机：'+s.driverName);if(s.driverPhone)parts.push(s.driverPhone);return parts.join(' ')}
 function getSupplierUnit(type){var m={'酒店':'间·晚','餐厅':'人','汽车交通':'天','景区':'人','保险':'人','航空交通':'人','铁路交通':'人'};return m[type]||''}
-function getSupplierProductLabel(type){var m={'酒店':'房型','餐厅':'餐标名称','汽车交通':'车型','景区':'票类','保险':'险种名称','航空交通':'航班/航线','铁路交通':'车次/线路'};return m[type]||'产品名称'}
+function getSupplierProductLabel(type){var m={'酒店':'房型','餐厅':'餐标名称','汽车交通':'车型','景区':'票类','保险':'险种名称','航空交通':'航班号','铁路交通':'车次'};return m[type]||'产品名称'}
+function railSeatOptions(selected){var seats=['高铁一等座','高铁二等座','高铁卧铺','普速座票','普速卧铺'];var html='<option value="">-- 选择坐席 --</option>';seats.forEach(function(t){html+='<option value="'+t+'"'+(t===selected?' selected':'')+'>'+t+'</option>'});return html}
 function getSupplierPriceLabel(type){var m={'酒店':'房价(元/间·晚)','餐厅':'餐标(元/人)','汽车交通':'车价(元/天)','景区':'成人票价(元/人)','保险':'保费(元/人)','航空交通':'票价(元/人)','铁路交通':'票价(元/人)'};return m[type]||'单价(元)'}
 function getTourGroup(id){return DB.tourGroups.find(function(t){return t.id===id})}
 function getTourRouteName(id){var t=getTourGroup(id);return t?t.routeName:'--'}
@@ -785,7 +794,7 @@ function statusBadge(s){var m={'待报价':'badge-gray','已报价':'badge-amber
 function effTourSendOff(tg){if(tg.sendOffTime)return tg.sendOffTime;if(tg.departureDate&&tg.duration){var d=new Date(tg.departureDate+'T00:00:00');d.setDate(d.getDate()+(tg.duration-1));return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}return null}
 function computeTourStatus(tg){var now=new Date();var dep=tg.departureDate?new Date(tg.departureDate+'T00:01:00'):null;var off=effTourSendOff(tg)?new Date(effTourSendOff(tg)+'T23:59:00'):null;if(dep&&now<dep)return tg.recruitClosed?'出团中':'招募中';if(off&&now>off)return'已完团';return'出团中'}
 function tourStatusBadge(tg){var s=computeTourStatus(tg);var m={'招募中':'badge-recruiting','出团中':'badge-ontour','已完团':'badge-completed'};return'<span class="badge '+(m[s]||'badge-gray')+'">'+esc(s)+'</span>'}
-function supplierOptions(type,selected){var types=Array.isArray(type)?type:[type];var list=DB.suppliers.filter(function(s){return types.indexOf(s.type)>=0});var ph=Array.isArray(type)?'交通':type;var html='<option value="">-- 选择'+ph+' --</option>';list.forEach(function(s){var label=s.name;if(s.productName)label+=' ['+s.productName;if(s.type==='景区'){label+=' 成人¥'+s.unitPrice;if(s.discountPrice!=null)label+=' 优惠¥'+(s.discountPrice||0)}else{label+=' ¥'+s.unitPrice+'/'+getSupplierUnit(s.type)}if(s.productName)label+=']';if(s.type==='汽车交通'&&s.plateNumber)label+=' '+s.plateNumber+(s.driverName?' '+s.driverName:'');html+='<option value="'+s.id+'"'+(s.id===selected?' selected':'')+'>'+esc(label)+'</option>'});return html}
+function supplierOptions(type,selected){var types=Array.isArray(type)?type:[type];var list=DB.suppliers.filter(function(s){return types.indexOf(s.type)>=0});var ph=Array.isArray(type)?'交通':type;var html='<option value="">-- 选择'+ph+' --</option>';list.forEach(function(s){var label=s.name;if(s.productName)label+=' ['+s.productName;if(s.type==='景区'){label+=' 成人¥'+s.unitPrice;if(s.discountPrice!=null)label+=' 优惠¥'+(s.discountPrice||0)}else{label+=' ¥'+s.unitPrice+'/'+getSupplierUnit(s.type)}if(s.productName)label+=']';if(s.type==='汽车交通'&&s.plateNumber)label+=' '+s.plateNumber+(s.driverName?' '+s.driverName:'');if(s.type==='航空交通'){var _av=[];if(s.flightSegment)_av.push(s.flightSegment);if(s.flightDate)_av.push(s.flightDate);if(_av.length)label+=' ('+_av.join(' ')+')'}else if(s.type==='铁路交通'){var _rl=[];if(s.travelDate)_rl.push(s.travelDate);if(s.seatType)_rl.push('坐席'+s.seatType);if(_rl.length)label+=' ('+_rl.join(' ')+')'}html+='<option value="'+s.id+'"'+(s.id===selected?' selected':'')+'>'+esc(label)+'</option>'});return html}
 function tourGroupOptions(selected){var list=DB.tourGroups.filter(function(t){return (computeTourStatus(t)==='招募中')&&!(t.recruitClosed&&t.id!==selected)});var html='<option value="">-- 选择团期 --</option>';list.forEach(function(t){html+='<option value="'+t.id+'"'+(t.id===selected?' selected':'')+'>'+esc(t.tourNo)+' - '+esc(t.routeName)+' ('+esc(t.departureDate)+')</option>'});return html}
 function openModal(title,body,footer,large){$('modalTitle').textContent=title;$('modalBody').innerHTML=body;$('modalFooter').innerHTML=footer||'';$('modal').className=large?'modal-large':'';$('modalOverlay').classList.add('show')}
 function closeModal(){$('modalOverlay').classList.remove('show');confirmCb=null}
@@ -816,8 +825,8 @@ var suppliers=[
 {id:'s15',type:'景区',name:'野象谷',contact:'孙经理',phone:'13800001060',address:'西双版纳州勐养镇',remark:'4A级 观象圣地',productName:'野象谷门票',unitPrice:85,discountPrice:45,freePrice:0,createdBy:'u1',isSample:true},
 {id:'s16',type:'保险',name:'中国人寿保险云南分公司',contact:'陈经理',phone:'13800001070',address:'昆明市盘龙区北京路100号',remark:'旅游意外险 24小时救援',productName:'旅游意外险',unitPrice:30,createdBy:'u1',isSample:true},
 {id:'s17',type:'保险',name:'中国平安人寿保险',contact:'林经理',phone:'13800001080',address:'昆明市五华区东风西路50号',remark:'旅游综合保险 含医疗',productName:'旅游综合保险',unitPrice:45,createdBy:'u1',isSample:true},
-{id:'s18',type:'航空交通',name:'东方航空云南分公司',contact:'何经理',phone:'13800001090',address:'昆明市官渡区长水国际机场',remark:'国内航线 团队票',productName:'昆明-大理航线',unitPrice:680,createdBy:'u1',isSample:true},
-{id:'s19',type:'铁路交通',name:'昆明铁路局客运段',contact:'马经理',phone:'13800001100',address:'昆明市官渡区昆明站',remark:'高铁/动车 团体票',productName:'昆明-丽江动车',unitPrice:220,createdBy:'u1',isSample:true}
+{id:'s18',type:'航空交通',name:'东方航空云南分公司',contact:'何经理',phone:'13800001090',address:'昆明市官渡区长水国际机场',remark:'国内航线 团队票',productName:'昆明-大理航线',unitPrice:680,createdBy:'u1',isSample:true,flightSegment:'昆明-大理',flightDate:'2026-08-15'},
+{id:'s19',type:'铁路交通',name:'昆明-丽江',contact:'马经理',phone:'13800001100',address:'昆明市官渡区昆明站',remark:'高铁/动车 团体票',productName:'D8765',unitPrice:220,createdBy:'u1',isSample:true,travelDate:'2026-08-15',seatType:'高铁二等座'}
 ];
 function mkMembers(n,basename){var m=[];var surnames=['王','李','张','刘','陈','杨','赵','黄','周','吴','徐','孙'];var givens=['伟','芳','娜','敏','静','强','磊','军','洋','艳','勇','霞'];var gs=['男','女'];for(var i=0;i<n;i++){var nm=i===0?basename:(surnames[i%12]+givens[i%12]);var yr=1965+(i*7)%40;var mon=String((i%12)+1).padStart(2,'0');var day=String((i*7%28)+1).padStart(2,'0');var seq=String(1000+i*37).slice(-4);var age=2026-yr;var tt='成人';var rmk='';if(i===3||i===7){tt='优惠';age=8+(i%4)}if(i===5&&n>6){tt='免票';age=4;rmk='儿童不占床'}m.push({id:genId('m'),name:nm,gender:gs[i%2],age:age,idType:'身份证',idNumber:'530102'+yr+mon+day+seq,phone:'139'+String(10000000+i*137).slice(0,8),travelerType:tt,remark:rmk})}return m}
 var tourGroups=[
@@ -1148,16 +1157,33 @@ html+='</div>';
 div.innerHTML=html;return div}
 function transportTypeOptions(selected){var types=['航空交通','铁路交通','汽车交通'];var html='<option value="">-- 选择类型 --</option>';types.forEach(function(t){html+='<option value="'+t+'"'+(t===selected?' selected':'')+'>'+t+'</option>'});return html}
 function transportSegmentOptions(selected){var segs=['去程','返程','全程'];var html='<option value="">-- 行程段 --</option>';segs.forEach(function(s){html+='<option value="'+s+'"'+(s===selected?' selected':'')+'>'+s+'</option>'});return html}
+function transportExtraHtml(s){
+  if(!s)return '';
+  var items=[];
+  if(s.type==='航空交通'){
+    if(s.flightSegment)items.push('航段：'+esc(s.flightSegment));
+    if(s.flightDate)items.push('日期：'+esc(s.flightDate));
+  }else if(s.type==='铁路交通'){
+    if(s.name)items.push('乘车区间：'+esc(s.name));
+    if(s.travelDate)items.push('日期：'+esc(s.travelDate));
+    if(s.seatType)items.push('坐席类型：'+esc(s.seatType));
+  }else return '';
+  if(!items.length)return '<span class="transport-extra-hint">该供应商未填写航段/日期等信息，请在「供应商管理」中补充</span>';
+  return '<span class="transport-extra-label">供应商信息</span>'+items.map(function(t){return '<span class="transport-extra-item">'+t+'</span>'}).join('');
+}
 function createTransportBlock(sel,seg){
-var div=document.createElement('div');
-div.className='transport-row';
+var wrap=document.createElement('div');
+wrap.className='transport-block';
 var _sup=sel?getSupplier(sel):null;
 var _type=_sup?_sup.type:'';
-div.innerHTML='<select class="transport-type" data-role="ttype" data-no-searchbox>'+transportTypeOptions(_type)+'</select><select class="transport-segment" data-role="tsegment" data-no-searchbox>'+transportSegmentOptions(seg)+'</select><select class="meal-sel transport-sel" data-type="transport" data-force-search>'+supplierOptions(_type||[],sel||'')+'</select><button type="button" class="btn-icon" data-action="remove-transport" title="删除交通方式">'+ICONS.del+'</button>';
-var typeSel=div.querySelector('select.transport-type');
-var supSel=div.querySelector('select.transport-sel');
-typeSel.addEventListener('change',function(){supSel.innerHTML=supplierOptions(typeSel.value||[],'')});
-return div}
+wrap.innerHTML='<div class="transport-row"><select class="transport-type" data-role="ttype" data-no-searchbox>'+transportTypeOptions(_type)+'</select><select class="transport-segment" data-role="tsegment" data-no-searchbox>'+transportSegmentOptions(seg)+'</select><select class="meal-sel transport-sel" data-type="transport" data-force-search>'+supplierOptions(_type||[],sel||'')+'</select><button type="button" class="btn-icon" data-action="remove-transport" title="删除交通方式">'+ICONS.del+'</button></div><div class="transport-extra"></div>';
+var typeSel=wrap.querySelector('select.transport-type');
+var supSel=wrap.querySelector('select.transport-sel');
+function _refreshExtra(){var s=getSupplier(supSel.value);wrap.querySelector('.transport-extra').innerHTML=transportExtraHtml(s)}
+typeSel.addEventListener('change',function(){supSel.innerHTML=supplierOptions(typeSel.value||[],'');_refreshExtra()});
+supSel.addEventListener('change',_refreshExtra);
+_refreshExtra();
+return wrap}
 function updateDayNumbers(){var blocks=document.querySelectorAll('#itineraryEditor .itinerary-day');blocks.forEach(function(b,i){var span=b.querySelector('.day-num');if(span)span.textContent=i+1})}
 function updateAddDayBtn(){var ec=$('itineraryEditor');if(!ec)return;var n=ec.querySelectorAll('.itinerary-day').length;var btn=document.querySelector('[data-action="add-itinerary-day"]');if(btn)btn.innerHTML=ICONS.plus+' 添加第'+(n+1)+'天';}
 function addTicketRow(el){var _sec=el.closest('.it-cat-section');var _list=_sec?_sec.querySelector('.ticket-list'):null;if(!_list)return;var row=document.createElement('div');row.className='it-cat-row ticket-row';row.innerHTML='<label>景区</label><select class="meal-sel" data-type="ticket">'+supplierOptions('景区','')+'</select><button type="button" class="btn-icon" data-action="remove-ticket" title="删除景区">'+ICONS.del+'</button>';_list.appendChild(row)}
@@ -1227,7 +1253,8 @@ if(s)filtered=filtered.filter(function(x){return x.name.toLowerCase().indexOf(s)
 if(filtered.length===0){html+='<div class="empty">'+ICONS.supplier+'<p>暂无供应商数据</p></div>'}
 else{html+='<div class="table-wrap"><table><thead><tr><th>类型</th><th>名称</th><th>产品/规格</th><th>单价</th><th>联系人</th><th>联系电话</th><th>车辆/司机</th><th>操作</th></tr></thead><tbody>';
 var _stotal=filtered.length,_sper=F_supplier.perPage,_stp=Math.max(1,Math.ceil(_stotal/_sper));if(F_supplier.page>_stp)F_supplier.page=_stp;var _sst=(F_supplier.page-1)*_sper;var _spg=filtered.slice(_sst,_sst+_sper);
-_spg.forEach(function(x){var vInfo=getVehicleInfo(x);var priceHtml=x.unitPrice?('¥'+esc(x.unitPrice)+'/'+getSupplierUnit(x.type)):'--';if(x.type==='景区'&&x.discountPrice!=null){priceHtml='成人¥'+esc(x.unitPrice)+'/人<br><span style="font-size:12px;color:var(--text-light)">优惠¥'+esc(x.discountPrice||0)+'/人 免票¥'+esc(x.freePrice||0)+'</span>'}html+='<tr><td><span class="badge badge-blue">'+esc(x.type)+'</span></td><td>'+esc(x.name)+'</td><td>'+esc(x.productName||'--')+'</td><td style="font-weight:600;color:var(--primary)">'+priceHtml+'</td><td>'+esc(x.contact)+'</td><td>'+esc(x.phone)+'</td><td style="font-size:12px">'+(vInfo?esc(vInfo):'--')+'</td><td><button class="btn-icon" data-action="edit-supplier" data-id="'+x.id+'" title="编辑">'+ICONS.edit+'</button><button class="btn-icon" data-action="delete-supplier" data-id="'+x.id+'" title="删除">'+ICONS.del+'</button></td></tr>'});
+_spg.forEach(function(x){var vInfo=getVehicleInfo(x);var priceHtml=x.unitPrice?('¥'+esc(x.unitPrice)+'/'+getSupplierUnit(x.type)):'--';if(x.type==='景区'&&x.discountPrice!=null){priceHtml='成人¥'+esc(x.unitPrice)+'/人<br><span style="font-size:12px;color:var(--text-light)">优惠¥'+esc(x.discountPrice||0)+'/人 免票¥'+esc(x.freePrice||0)+'</span>'}var _pcell=esc(x.productName||'--');if(x.type==='航空交通'){var _fd=[];if(x.flightSegment)_fd.push('航段 '+esc(x.flightSegment));if(x.flightDate)_fd.push('日期 '+esc(x.flightDate));if(_fd.length)_pcell+='<br><span style="font-size:12px;color:var(--text-light)">'+_fd.join(' · ')+'</span>'}
+if(x.type==='铁路交通'){var _rd=[];if(x.travelDate)_rd.push('日期 '+esc(x.travelDate));if(x.seatType)_rd.push(esc(x.seatType));if(_rd.length)_pcell+='<br><span style="font-size:12px;color:var(--text-light)">'+_rd.join(' · ')+'</span>'}html+='<tr><td><span class="badge badge-blue">'+esc(x.type)+'</span></td><td>'+esc(x.name)+'</td><td>'+_pcell+'</td><td style="font-weight:600;color:var(--primary)">'+priceHtml+'</td><td>'+esc(x.contact)+'</td><td>'+esc(x.phone)+'</td><td style="font-size:12px">'+(vInfo?esc(vInfo):'--')+'</td><td><button class="btn-icon" data-action="edit-supplier" data-id="'+x.id+'" title="编辑">'+ICONS.edit+'</button><button class="btn-icon" data-action="delete-supplier" data-id="'+x.id+'" title="删除">'+ICONS.del+'</button></td></tr>'});
 html+='</tbody></table></div>';
 html+=buildPager('supplier-page',_stotal,_sper,F_supplier.page);}
 $('pageContent').innerHTML=html;
@@ -1235,18 +1262,20 @@ if($('supplierSearch'))$('supplierSearch').value=F_supplier.search;
 if(wasSearch){var _si=$('supplierSearch');if(_si){_si.focus();var _v=_si.value;try{_si.setSelectionRange(_v.length,_v.length)}catch(e){}}}
 }
 function showSupplierForm(id){var s=id?getSupplier(id):null;
-var html='<div class="form-row"><div class="form-group"><label>类型</label><select id="sf_type" data-no-searchbox><option value="酒店"'+(s&&s.type==='酒店'?' selected':'')+'>酒店</option><option value="餐厅"'+(s&&s.type==='餐厅'?' selected':'')+'>餐厅</option><option value="汽车交通"'+(s&&s.type==='汽车交通'?' selected':'')+'>汽车交通</option><option value="航空交通"'+(s&&s.type==='航空交通'?' selected':'')+'>航空交通</option><option value="铁路交通"'+(s&&s.type==='铁路交通'?' selected':'')+'>铁路交通</option><option value="景区"'+(s&&s.type==='景区'?' selected':'')+'>景区</option><option value="保险"'+(s&&s.type==='保险'?' selected':'')+'>保险</option></select></div><div class="form-group"><label>名称</label><input type="text" id="sf_name" value="'+esc(s?s.name:'')+'"></div></div>';
+var html='<div class="form-row"><div class="form-group"><label>类型</label><select id="sf_type" data-no-searchbox><option value="酒店"'+(s&&s.type==='酒店'?' selected':'')+'>酒店</option><option value="餐厅"'+(s&&s.type==='餐厅'?' selected':'')+'>餐厅</option><option value="汽车交通"'+(s&&s.type==='汽车交通'?' selected':'')+'>汽车交通</option><option value="航空交通"'+(s&&s.type==='航空交通'?' selected':'')+'>航空交通</option><option value="铁路交通"'+(s&&s.type==='铁路交通'?' selected':'')+'>铁路交通</option><option value="景区"'+(s&&s.type==='景区'?' selected':'')+'>景区</option><option value="保险"'+(s&&s.type==='保险'?' selected':'')+'>保险</option></select></div><div class="form-group"><label id="sf_nameLabel">名称</label><input type="text" id="sf_name" value="'+esc(s?s.name:'')+'"></div></div>';
 html+='<div class="form-row"><div class="form-group" id="sf_productGroup"><label id="sf_productLabel">'+getSupplierProductLabel(s?s.type:'酒店')+'</label><input type="text" id="sf_productName" value="'+esc(s?s.productName:'')+'"></div><div class="form-group"><label id="sf_priceLabel">'+getSupplierPriceLabel(s?s.type:'酒店')+'</label><input type="number" id="sf_unitPrice" value="'+esc(s?s.unitPrice:'')+'" min="0"></div></div>';
+html+='<div id="sf_flightFields" style="display:'+(s&&s.type==='航空交通'?'block':'none')+'"><div class="form-row"><div class="form-group"><label>航段</label><input type="text" id="sf_flightSegment" value="'+esc(s?s.flightSegment:'')+'"></div><div class="form-group"><label>航班日期</label><input type="text" readonly class="date-picker" id="sf_flightDate" data-target="sf_flightDate" value="'+esc(s?s.flightDate:'')+'" placeholder="请选择航班日期"></div></div></div>';
+html+='<div id="sf_railFields" style="display:'+(s&&s.type==='铁路交通'?'block':'none')+'"><div class="form-row"><div class="form-group"><label>出行日期</label><input type="text" readonly class="date-picker" id="sf_travelDate" data-target="sf_travelDate" value="'+esc(s?s.travelDate:'')+'" placeholder="请选择出行日期"></div><div class="form-group"><label>坐席类型</label><select id="sf_seatType" data-no-searchbox>'+railSeatOptions(s?s.seatType:'')+'</select></div></div></div>';
 html+='<div id="sf_ticketPriceFields" style="display:'+(s&&s.type==='景区'?'block':'none')+'"><div class="form-row"><div class="form-group"><label>优惠票价(元/人)</label><input type="number" id="sf_discountPrice" value="'+esc(s?s.discountPrice:'')+'" min="0"></div><div class="form-group"><label>免票(元/人)</label><input type="number" id="sf_freePrice" value="'+esc(s?s.freePrice:0)+'" min="0"></div></div></div>';
 html+='<div class="form-row"><div class="form-group"><label>联系人</label><input type="text" id="sf_contact" value="'+esc(s?s.contact:'')+'"></div><div class="form-group"><label>联系电话</label><input type="tel" id="sf_phone" value="'+esc(s?s.phone:'')+'"></div></div>';
 html+='<div id="sf_vehicleFields" style="display:'+(s&&s.type==='汽车交通'?'block':'none')+'"><div class="form-row"><div class="form-group"><label>车牌号码</label><input type="text" id="sf_plateNumber" value="'+esc(s?s.plateNumber:'')+'"></div><div class="form-group"><label>司机姓名</label><input type="text" id="sf_driverName" value="'+esc(s?s.driverName:'')+'"></div></div><div class="form-row"><div class="form-group"><label>司机联系电话</label><input type="tel" id="sf_driverPhone" value="'+esc(s?s.driverPhone:'')+'"></div></div></div>';
 html+='<div class="form-group"><label>地址</label><input type="text" id="sf_address" value="'+esc(s?s.address:'')+'"></div>';
 html+='<div class="form-group"><label>备注</label><textarea id="sf_remark" rows="2">'+esc(s?s.remark:'')+'</textarea></div>';
 openModal((s?'编辑':'新建')+'供应商',html,'<button class="btn btn-primary" data-action="save-supplier" data-id="'+(id||'')+'">保存</button><button class="btn btn-secondary" data-action="close-modal">取消</button>');
-$('sf_type').addEventListener('change',updateSupplierProductFields)}
-function updateSupplierProductFields(){var type=$('sf_type').value;$('sf_productLabel').textContent=getSupplierProductLabel(type);$('sf_priceLabel').textContent=getSupplierPriceLabel(type);var pg=$('sf_productGroup');if(pg)pg.style.display=(type==='餐厅'||type==='景区')?'none':'';var vf=$('sf_vehicleFields');if(vf)vf.style.display=(type==='汽车交通')?'block':'none';var tf=$('sf_ticketPriceFields');if(tf)tf.style.display=(type==='景区')?'block':'none'}
+$('sf_type').addEventListener('change',updateSupplierProductFields);updateSupplierProductFields()}
+function updateSupplierProductFields(){var type=$('sf_type').value;$('sf_nameLabel').textContent=(type==='航空交通'?'航空公司':(type==='铁路交通'?'乘车区间':'名称'));$('sf_productLabel').textContent=getSupplierProductLabel(type);$('sf_priceLabel').textContent=getSupplierPriceLabel(type);var pg=$('sf_productGroup');if(pg)pg.style.display=(type==='餐厅'||type==='景区')?'none':'';var vf=$('sf_vehicleFields');if(vf)vf.style.display=(type==='汽车交通')?'block':'none';var tf=$('sf_ticketPriceFields');if(tf)tf.style.display=(type==='景区')?'block':'none';var ff=$('sf_flightFields');if(ff)ff.style.display=(type==='航空交通')?'block':'none';var rf=$('sf_railFields');if(rf)rf.style.display=(type==='铁路交通')?'block':'none'}
 function saveSupplier(id){var name=$('sf_name').value.trim();if(!name){showToast('名称不能为空','error');return}
-var data={type:$('sf_type').value,name:name,contact:$('sf_contact').value.trim(),phone:$('sf_phone').value.trim(),address:$('sf_address').value.trim(),remark:$('sf_remark').value.trim(),productName:$('sf_productName').value.trim(),unitPrice:parseFloat($('sf_unitPrice').value)||0,plateNumber:$('sf_plateNumber')?$('sf_plateNumber').value.trim():'',driverName:$('sf_driverName')?$('sf_driverName').value.trim():'',driverPhone:$('sf_driverPhone')?$('sf_driverPhone').value.trim():'',discountPrice:$('sf_discountPrice')?parseFloat($('sf_discountPrice').value)||0:0,freePrice:$('sf_freePrice')?parseFloat($('sf_freePrice').value)||0:0};
+var data={type:$('sf_type').value,name:name,contact:$('sf_contact').value.trim(),phone:$('sf_phone').value.trim(),address:$('sf_address').value.trim(),remark:$('sf_remark').value.trim(),productName:$('sf_productName').value.trim(),unitPrice:parseFloat($('sf_unitPrice').value)||0,plateNumber:$('sf_plateNumber')?$('sf_plateNumber').value.trim():'',driverName:$('sf_driverName')?$('sf_driverName').value.trim():'',driverPhone:$('sf_driverPhone')?$('sf_driverPhone').value.trim():'',discountPrice:$('sf_discountPrice')?parseFloat($('sf_discountPrice').value)||0:0,freePrice:$('sf_freePrice')?parseFloat($('sf_freePrice').value)||0:0,flightSegment:$('sf_flightSegment')?$('sf_flightSegment').value.trim():'',flightDate:$('sf_flightDate')?$('sf_flightDate').value.trim():'',travelDate:$('sf_travelDate')?$('sf_travelDate').value.trim():'',seatType:$('sf_seatType')?$('sf_seatType').value.trim():''};
 if(id){var s=getSupplier(id);Object.assign(s,data);showToast('供应商已更新','success')}else{data.id=genId('s');data.createdBy=currentUser.id;DB.suppliers.push(data);showToast('供应商已创建','success')}
 saveData();closeModal();renderSupplier()}
 function deleteSupplier(id){showConfirm('确定删除该供应商？',function(){DB.suppliers=DB.suppliers.filter(function(s){return s.id!==id});saveData();renderSupplier();showToast('已删除','success')})}
@@ -3085,7 +3114,7 @@ case'delete-tour':deleteTour(id);break;
 case'add-itinerary-day':$('itineraryEditor').appendChild(createDayBlock(null));updateDayNumbers();updateAddDayBtn();break;
 case'remove-itinerary-day':el.closest('.itinerary-day').remove();updateDayNumbers();updateAddDayBtn();break;
 case'add-transport':$('transportEditor').appendChild(createTransportBlock(null));break;
-case'remove-transport':if(el.closest('.transport-editor').querySelectorAll('.transport-row').length>1){el.closest('.transport-row').remove()}else{var _ts=el.closest('.transport-row').querySelector('select.transport-sel');if(_ts)_ts.value=''};break;
+case'remove-transport':if(el.closest('.transport-editor').querySelectorAll('.transport-block').length>1){el.closest('.transport-block').remove()}else{var _ts=el.closest('.transport-block').querySelector('select.transport-sel');if(_ts)_ts.value=''};break;
 case'add-ticket':addTicketRow(el);break;
 case'remove-ticket':removeTicketRow(el);break;
 case'new-order':showOrderForm(null);break;
