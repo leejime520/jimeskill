@@ -126,6 +126,33 @@ th.sortable:hover{background:#f1f5f9}
 .task-item.pending{background:#f9fafb;border-left:3px solid #9ca3af}
 .task-info .task-title{font-weight:600;font-size:14px}
 .task-info .task-detail{font-size:12px;color:var(--text-light);margin-top:2px}
+/* 待办事项看板（今日聚焦·时间轴） */
+.todo-board{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;margin-bottom:20px;border-left:4px solid var(--primary)}
+.todo-board .header{display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:16px;font-weight:700}
+.todo-count{margin-left:auto;font-size:13px;font-weight:600;color:var(--primary);background:var(--primary-bg);padding:2px 10px;border-radius:10px}
+.todo-filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.todo-filters .chip{font-size:13px;padding:5px 14px;border:1px solid var(--border);background:#fff;color:var(--text-light);border-radius:999px;cursor:pointer;transition:.15s}
+.todo-filters .chip:hover{border-color:var(--primary);color:var(--primary)}
+.todo-filters .chip.active{background:var(--primary);border-color:var(--primary);color:#fff}
+.todo-sep{font-size:12px;font-weight:700;color:var(--text-light);letter-spacing:1px;margin:16px 0 8px;padding-left:6px;border-left:3px solid var(--border)}
+.todo-sep:first-child{margin-top:0}
+.todo-item{display:flex;align-items:center;gap:12px;padding:10px 4px;border-bottom:1px solid #f0f1f3}
+.todo-item:last-child{border-bottom:none}
+.todo-item.urgent{background:var(--danger-bg);border-radius:8px;padding:10px}
+.todo-time{flex:0 0 78px;text-align:right;font-size:12px;font-weight:700;color:var(--text-light);white-space:nowrap}
+.todo-time.t-ov{color:var(--danger)}
+.todo-time.t-today{color:#d97706}
+.todo-info{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+.todo-badge{display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:9px;width:max-content;margin-bottom:2px}
+.todo-badge.t-receive{background:#e6f0ff;color:#1d4ed8}
+.todo-badge.t-contract{background:#e9f9ef;color:#0f9d58}
+.todo-badge.t-invoice{background:#fff3e0;color:#d97706}
+.todo-badge.t-reimb{background:#f3e8ff;color:#7c3aed}
+.todo-badge.t-fix{background:#fef3c7;color:#b45309}
+.todo-badge.t-depart{background:#e0f2fe;color:#0369a1}
+.todo-badge.t-sign{background:#ccfbf1;color:#0d9488}
+.todo-title{font-weight:600;font-size:14px}
+.todo-detail{font-size:12px;color:var(--text-light)}
 /* Tables */
 .table-wrap{overflow-x:auto;background:#fff;border-radius:var(--radius);box-shadow:var(--shadow)}
 table{width:100%;border-collapse:collapse;font-size:14px}
@@ -794,7 +821,7 @@ function statusBadge(s){var m={'待报价':'badge-gray','已报价':'badge-amber
 function effTourSendOff(tg){if(tg.sendOffTime)return tg.sendOffTime;if(tg.departureDate&&tg.duration){var d=new Date(tg.departureDate+'T00:00:00');d.setDate(d.getDate()+(tg.duration-1));return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}return null}
 function computeTourStatus(tg){var now=new Date();var dep=tg.departureDate?new Date(tg.departureDate+'T00:01:00'):null;var off=effTourSendOff(tg)?new Date(effTourSendOff(tg)+'T23:59:00'):null;if(dep&&now<dep)return tg.recruitClosed?'出团中':'招募中';if(off&&now>off)return'已完团';return'出团中'}
 function tourStatusBadge(tg){var s=computeTourStatus(tg);var m={'招募中':'badge-recruiting','出团中':'badge-ontour','已完团':'badge-completed'};return'<span class="badge '+(m[s]||'badge-gray')+'">'+esc(s)+'</span>'}
-function supplierOptions(type,selected){var types=Array.isArray(type)?type:[type];var list=DB.suppliers.filter(function(s){return types.indexOf(s.type)>=0});var ph=Array.isArray(type)?'交通':type;var html='<option value="">-- 选择'+ph+' --</option>';list.forEach(function(s){var label=s.name;if(s.productName)label+=' ['+s.productName;if(s.type==='景区'){label+=' 成人¥'+s.unitPrice;if(s.discountPrice!=null)label+=' 优惠¥'+(s.discountPrice||0)}else{label+=' ¥'+s.unitPrice+'/'+getSupplierUnit(s.type)}if(s.productName)label+=']';if(s.type==='汽车交通'&&s.plateNumber)label+=' '+s.plateNumber+(s.driverName?' '+s.driverName:'');if(s.type==='航空交通'){var _av=[];if(s.flightSegment)_av.push(s.flightSegment);if(s.flightDate)_av.push(s.flightDate);if(_av.length)label+=' ('+_av.join(' ')+')'}else if(s.type==='铁路交通'){var _rl=[];if(s.travelDate)_rl.push(s.travelDate);if(s.seatType)_rl.push('坐席'+s.seatType);if(_rl.length)label+=' ('+_rl.join(' ')+')'}html+='<option value="'+s.id+'"'+(s.id===selected?' selected':'')+'>'+esc(label)+'</option>'});return html}
+function supplierOptions(type,selected){var types=Array.isArray(type)?type:[type];var list=DB.suppliers.filter(function(s){return types.indexOf(s.type)>=0});var ph=Array.isArray(type)?'交通':type;var html='<option value="">-- 选择'+ph+' --</option>';list.forEach(function(s){var label;if(s.type==='航空交通'){label='['+(s.flightSegment||'')+']'+(s.productName?(' '+s.productName):'')+(s.flightDate?('，'+s.flightDate):'')+'，¥'+s.unitPrice+'/'+getSupplierUnit(s.type)+'，'+s.name}else if(s.type==='铁路交通'){label='['+(s.name||'')+']'+(s.productName?(' '+s.productName):'')+(s.travelDate?('，'+s.travelDate):'')+'，¥'+s.unitPrice+'/'+getSupplierUnit(s.type)+'，'+(s.seatType||'')}else{label=s.name;if(s.productName)label+=' ['+s.productName;if(s.type==='景区'){label+=' 成人¥'+s.unitPrice;if(s.discountPrice!=null)label+=' 优惠¥'+(s.discountPrice||0)}else{label+=' ¥'+s.unitPrice+'/'+getSupplierUnit(s.type)}if(s.productName)label+=']';if(s.type==='汽车交通'&&s.plateNumber)label+=' '+s.plateNumber+(s.driverName?' '+s.driverName:'')}html+='<option value="'+s.id+'"'+(s.id===selected?' selected':'')+'>'+esc(label)+'</option>'});return html}
 function tourGroupOptions(selected){var list=DB.tourGroups.filter(function(t){return (computeTourStatus(t)==='招募中')&&!(t.recruitClosed&&t.id!==selected)});var html='<option value="">-- 选择团期 --</option>';list.forEach(function(t){html+='<option value="'+t.id+'"'+(t.id===selected?' selected':'')+'>'+esc(t.tourNo)+' - '+esc(t.routeName)+' ('+esc(t.departureDate)+')</option>'});return html}
 function openModal(title,body,footer,large){$('modalTitle').textContent=title;$('modalBody').innerHTML=body;$('modalFooter').innerHTML=footer||'';$('modal').className=large?'modal-large':'';$('modalOverlay').classList.add('show')}
 function closeModal(){$('modalOverlay').classList.remove('show');confirmCb=null}
@@ -825,7 +852,7 @@ var suppliers=[
 {id:'s15',type:'景区',name:'野象谷',contact:'孙经理',phone:'13800001060',address:'西双版纳州勐养镇',remark:'4A级 观象圣地',productName:'野象谷门票',unitPrice:85,discountPrice:45,freePrice:0,createdBy:'u1',isSample:true},
 {id:'s16',type:'保险',name:'中国人寿保险云南分公司',contact:'陈经理',phone:'13800001070',address:'昆明市盘龙区北京路100号',remark:'旅游意外险 24小时救援',productName:'旅游意外险',unitPrice:30,createdBy:'u1',isSample:true},
 {id:'s17',type:'保险',name:'中国平安人寿保险',contact:'林经理',phone:'13800001080',address:'昆明市五华区东风西路50号',remark:'旅游综合保险 含医疗',productName:'旅游综合保险',unitPrice:45,createdBy:'u1',isSample:true},
-{id:'s18',type:'航空交通',name:'东方航空云南分公司',contact:'何经理',phone:'13800001090',address:'昆明市官渡区长水国际机场',remark:'国内航线 团队票',productName:'昆明-大理航线',unitPrice:680,createdBy:'u1',isSample:true,flightSegment:'昆明-大理',flightDate:'2026-08-15'},
+{id:'s18',type:'航空交通',name:'东方航空云南分公司',contact:'何经理',phone:'13800001090',address:'昆明市官渡区长水国际机场',remark:'国内航线 团队票',productName:'MU1111',unitPrice:680,createdBy:'u1',isSample:true,flightSegment:'昆明-大理',flightDate:'2026-08-15'},
 {id:'s19',type:'铁路交通',name:'昆明-丽江',contact:'马经理',phone:'13800001100',address:'昆明市官渡区昆明站',remark:'高铁/动车 团体票',productName:'D8765',unitPrice:220,createdBy:'u1',isSample:true,travelDate:'2026-08-15',seatType:'高铁二等座'}
 ];
 function mkMembers(n,basename){var m=[];var surnames=['王','李','张','刘','陈','杨','赵','黄','周','吴','徐','孙'];var givens=['伟','芳','娜','敏','静','强','磊','军','洋','艳','勇','霞'];var gs=['男','女'];for(var i=0;i<n;i++){var nm=i===0?basename:(surnames[i%12]+givens[i%12]);var yr=1965+(i*7)%40;var mon=String((i%12)+1).padStart(2,'0');var day=String((i*7%28)+1).padStart(2,'0');var seq=String(1000+i*37).slice(-4);var age=2026-yr;var tt='成人';var rmk='';if(i===3||i===7){tt='优惠';age=8+(i%4)}if(i===5&&n>6){tt='免票';age=4;rmk='儿童不占床'}m.push({id:genId('m'),name:nm,gender:gs[i%2],age:age,idType:'身份证',idNumber:'530102'+yr+mon+day+seq,phone:'139'+String(10000000+i*137).slice(0,8),travelerType:tt,remark:rmk})}return m}
@@ -957,27 +984,158 @@ html+='<span class="role-badge '+(currentUser.role==='teacher'?'badge-teacher':'
 html+='<button class="btn btn-sm btn-danger" data-action="logout">'+ICONS.logout+'<span class="btn-text">退出</span></button>';
 html+='</div>';return html}
 /* Dashboard */
+var todoFilter='全部';
+function renderTodoBoard(){
+var orders=getVisibleData('orders');
+var groups=getVisibleData('tourGroups');
+var receipts=getVisibleData('finReceipts');
+var contracts=getVisibleData('contracts');
+var invoices=getVisibleData('finInvoices');
+var grembs=getVisibleData('finGuideReimbursements');
+var td=today();
+var _tc={'签约':'t-sign','收客':'t-sign','收款':'t-receive','合同':'t-contract','发票':'t-invoice','派导游':'t-depart','出团计划':'t-depart','团队确认函':'t-depart','报账':'t-reimb','资料':'t-fix'};
+var _bl={'签约':'去处理','收客':'去收客','收款':'收付款','合同':'签合同','发票':'开发票','派导游':'派导游','出团计划':'出团计划','团队确认函':'确认函','报账':'去报账','资料':'去完善'};
+function _dnum(d){var p=(d||'').split('-');return p[0]?Date.UTC(+p[0],+p[1]-1,+p[2]):0}
+function _days(dep){if(!dep)return null;return Math.round((_dnum(dep)-_dnum(td))/86400000)}
+var items=[];
+/* —— 订单维度：收客 / 收款 / 合同 / 发票 / 团队确认函（一单一函） —— */
+orders.forEach(function(o){
+  if(o.status==='已取消')return;
+  var tg=getTourGroup(o.tourGroupId);
+  var dep=tg?tg.departureDate:o.departureDate;
+  var d=_days(dep);
+  var receiv=finOrderReceivable(o);
+  var recs=receipts.filter(function(r){return r.orderId===o.id&&r.status==='已收'});
+  var recv=recs.reduce(function(s,r){return s+(parseFloat(r.amount)||0)},0);
+  var _depR=recs.find(function(r){return r.kind==='定金'||r.kind==='全款'||r.kind==='分期'});
+  var hasDeposit=!!_depR;
+  var fullyPaid=receiv>0&&recv>=receiv;
+  var c=contracts.find(function(x){return x.orderId===o.id});
+  var inv=invoices.find(function(x){return x.orderId===o.id&&x.status!=='已作废'});
+  if(receiv<=0){
+    items.push({cat:'资料',type:'资料',title:'待完善资料 · '+esc(o.orderNo),detail:'客户 '+esc(o.customerName)+' · 该订单应收为0（未关联有效团期或团期未设价格/人数为0），请先在「订单」中关联团期并维护价格',action:'view-order',actId:o.id,dep:null,d:null});
+    return;
+  }
+  if(o.status==='未签约'){
+    /* 先收款后签约：未付定金/全款/分期前，先催收款；付了才可签约 */
+    if(!hasDeposit){
+      items.push({cat:'收款',type:'收款',title:'待收定金 · '+esc(o.orderNo),detail:'客户 '+esc(o.customerName)+' · 应收 '+fmtMoney(receiv)+' · 需先收定金/全款/分期后方可签约',action:'fin-new-receipt',actId:o.id,dep:dep,d:d});
+    }else{
+      items.push({cat:'签约',type:'签约',title:'待签约 · '+esc(o.orderNo),detail:'客户 '+esc(o.customerName)+' · 已收 '+fmtMoney(recv)+'（'+esc(_depR.kind)+'）· 已满足签约条件，请签署旅游合同',action:'view-order',actId:o.id,dep:dep,d:d});
+    }
+    return;
+  }
+  /* 已签约：仅付定金需同时提醒签合同 + 收尾款；尾款收讫即付款流程结束 */
+  if(!hasDeposit){
+    items.push({cat:'收款',type:'收款',title:'待收定金 · '+esc(o.orderNo),detail:'客户 '+esc(o.customerName)+' · 应收 '+fmtMoney(receiv)+' · 已签约但未见定金/全款/分期（异常），请核对收款',action:'fin-new-receipt',actId:o.id,dep:dep,d:d});
+  }else if(!fullyPaid){
+    var due=receiv-recv;
+    items.push({cat:'收款',type:'收款',title:'待收尾款 · '+esc(o.orderNo),detail:'客户 '+esc(o.customerName)+' · 已收 '+fmtMoney(recv)+'（'+esc(_depR.kind)+'）· 待收尾款 '+fmtMoney(due),action:'fin-new-receipt',actId:o.id,dep:dep,d:d});
+  }
+  if(hasDeposit&&!c){
+    items.push({cat:'合同',type:'合同',title:'待签旅游合同 · '+esc(o.orderNo),detail:'客户 '+esc(o.customerName)+' · 已收 '+fmtMoney(recv)+'（'+esc(_depR.kind)+'）· 已收定金/全款/分期，请及时签约（建议出团前完成）',action:'sign-contract',actId:o.id,dep:dep,d:d});
+  }
+  if(fullyPaid&&!inv){
+    items.push({cat:'发票',type:'发票',title:'待开据发票 · '+esc(o.orderNo),detail:'客户 '+esc(o.customerName)+' · 团费已收讫 '+fmtMoney(receiv)+' · 收款后应及时开票',action:'fin-new-invoice',actId:o.id,dep:dep,d:d});
+  }
+  if(o.status==='已签约'&&!o.confirmGenerated){
+    items.push({cat:'出团',type:'团队确认函',title:'待开团队确认函 · '+esc(o.orderNo),detail:'客户 '+esc(o.customerName)+' · 一单一函，出团前需向客户确认行程与费用',action:'generate-confirm',actId:o.id,dep:dep,d:d});
+  }
+});
+/* —— 团期维度：派导游 / 出团计划（一团一期一计划） / 导游报账（一团一结） —— */
+groups.forEach(function(tg){
+  var st=computeTourStatus(tg);
+  var dep=tg.departureDate;var d=_days(dep);
+  /* 收客：正在招募的所有团期都应列出，便于计调紧盯收客进度（含已报/余位、是否截单） */
+  if(st==='招募中'){
+    var _pax=getVisibleData('orders').filter(function(o){return o.tourGroupId===tg.id&&o.status!=='已取消'}).reduce(function(s,o){return s+(o.pax||0)},0);
+    var _cap=tg.maxPax||0;
+    var _det=esc(tg.routeName)+' · 招募中 · 剩'+d+'天出发';
+    if(_cap){
+      _det+=' · 已报 '+_pax+'/'+_cap+' 人';
+      var _left=_cap-_pax;
+      if(_left<=0)_det+='（已满员）';else _det+=' · 余位 '+_left;
+    }else{_det+=' · 已报 '+_pax+' 人';}
+    if(tg.recruitClosed)_det+=' · 已截单';
+    items.push({cat:'收客',type:'收客',title:'收客 · '+esc(tg.tourNo),detail:_det,action:'view-tour',actId:tg.id,dep:dep,d:d});
+  }
+  if(!tg.guideId&&st!=='已完团'){
+    items.push({cat:'出团',type:'派导游',title:'待派导游 · '+esc(tg.tourNo),detail:esc(tg.routeName)+' · '+st+' · 出团前需落实带团导游',action:'view-tour',actId:tg.id,dep:dep,d:d});
+  }
+  if(!tg.planGenerated&&st!=='已完团'){
+    items.push({cat:'出团',type:'出团计划',title:'待生成出团计划 · '+esc(tg.tourNo),detail:esc(tg.routeName)+' · '+st+' · 一团一期一计划，出团前需生成出团计划书',action:'generate-plan',actId:tg.id,dep:dep,d:d});
+  }
+  if(st==='出团中'||st==='已完团'){
+    var rec=grembs.find(function(x){return x.tourGroupId===tg.id});
+    if(!rec){
+      items.push({cat:'报账',type:'报账',title:'待导游报账 · '+esc(tg.tourNo),detail:esc(tg.routeName)+' · '+st+' · 回团后及时报账决算',action:'fin-gr-edit',actId:tg.id,dep:dep,d:d,settle:true});
+    }
+  }
+});
+/* —— 时间压力 / 分桶 / 排序 —— */
+items.forEach(function(it){
+  var level='normal',overdue=false,bucket='后续',time='';
+  if(it.settle){
+    var _st=computeTourStatus(getTourGroup(it.actId));
+    if(_st==='已完团'){level='urgent';bucket='回团结算';time='已回团待报账';it.score=-20000;}
+    else{level='normal';bucket='回团结算';time='出团中待报账';it.score=4000;}
+  }else if(it.d===null){
+    bucket='其他';time='';it.score=1e9;
+  }else if(it.d<0){
+    overdue=true;level='urgent';bucket='逾期';time='逾期'+(-it.d)+'天';it.score=it.d-1e5;
+  }else if(it.d===0){
+    bucket='今日出发';time='今日出发';it.score=it.d;
+  }else if(it.d<=7){
+    bucket='即将出发';time='剩'+it.d+'天';it.score=it.d;
+  }else{
+    bucket='后续';time='剩'+it.d+'天';it.score=it.d;
+  }
+  it.level=level;it.overdue=overdue;it.bucket=bucket;it.time=time;
+});
+items.sort(function(a,b){if(a.score!==b.score)return a.score-b.score;return (a.cat+a.title).localeCompare(b.cat+a.title)});
+/* —— 筛选 —— */
+var _list=items.filter(function(it){
+  if(todoFilter==='全部')return true;
+  if(todoFilter==='逾期')return it.overdue;
+  return it.cat===todoFilter;
+});
+/* —— 渲染（今日聚焦·时间轴） —— */
+var html='<div class="todo-board">';
+html+='<div class="header">'+ICONS.check+' 待办事项 <span class="todo-count">'+_list.length+' 项</span></div>';
+html+='<div class="todo-filters">';
+['全部','逾期','收客','收款','合同','发票','出团','报账'].forEach(function(k){
+  html+='<button class="chip'+(todoFilter===k?' active':'')+'" data-action="todo-filter" data-id="'+k+'">'+k+'</button>';
+});
+html+='</div>';
+if(_list.length===0){html+='<div class="empty">当前筛选下暂无待办事项</div>';}
+else{
+  var _cur=null;
+  _list.forEach(function(it){
+    if(it.bucket!==_cur){_cur=it.bucket;html+='<div class="todo-sep">'+_bucketLabel(it.bucket)+'</div>';}
+    var lvl=it.level==='urgent'?'urgent':(it.level==='info'?'info':'normal');
+    var _tcls=it.overdue?'t-ov':(it.d===0?'t-today':'');
+    html+='<div class="todo-item '+lvl+'">';
+    html+='<div class="todo-time '+_tcls+'">'+esc(it.time||'—')+'</div>';
+    html+='<div class="todo-info"><span class="todo-badge '+_tc[it.type]+'">'+it.type+'</span><span class="todo-title">'+it.title+'</span><span class="todo-detail">'+it.detail+'</span></div>';
+    html+='<button class="btn btn-sm '+(it.level==='urgent'?'btn-danger':'btn-primary')+'" data-action="'+it.action+'" data-id="'+it.actId+'">'+_bl[it.type]+'</button>';
+    html+='</div>';
+  });
+}
+html+='</div>';
+return html;
+}
+function _bucketLabel(b){var m={'逾期':'逾期待办','今日出发':'今日出发','即将出发':'即将出发（7天内）','后续':'后续出发','回团结算':'回团结算','其他':'其他'};return m[b]||b}
 function renderDashboard(){
 var orders=getVisibleData('orders');
 var tourGroups=getVisibleData('tourGroups');
 var finance=getVisibleData('financeRecords');
-var td=today();var ma=daysAgo(3);var in3=daysFromNow(3);
+var td=today();var in3=daysFromNow(3);
 var pendingQuote=orders.filter(function(o){return o.status==='未签约'});
-var overdue=pendingQuote.filter(function(o){return typeof o.createdAt==='string'&&o.createdAt<ma});
-var pendingToday=orders.filter(function(o){return o.departureDate===td});
-var upcoming=orders.filter(function(o){return o.status==='已签约'&&o.departureDate>=td&&o.departureDate<=in3});
 var thisMonth=orders.filter(function(o){return typeof o.createdAt==='string'&&o.createdAt.startsWith(td.slice(0,7))});
 var onTour=orders.filter(function(o){return o.departureDate===td}).reduce(function(s,o){return s+(o.pax||0)},0);
 var totalData=(DB.suppliers?DB.suppliers.length:0)+(DB.guides?DB.guides.length:0)+(DB.tourGroups?DB.tourGroups.length:0)+(DB.orders?DB.orders.length:0)+(DB.financeRecords?DB.financeRecords.length:0);
 var html='';
-html+='<div class="today-tasks"><div class="header">'+ICONS.check+' 今天要处理</div>';
-var tasks=[];
-overdue.forEach(function(o){tasks.push('<div class="task-item overdue"><div class="task-info"><span class="task-title">[逾期] 订单 '+esc(o.orderNo)+' 未签约待跟进</span><span class="task-detail">客户：'+esc(o.customerName)+' | 线路：'+esc(getTourRouteName(o.tourGroupId))+' | '+esc(o.pax)+'人</span></div><button class="btn btn-sm btn-danger" data-action="view-order" data-id="'+o.id+'">立即处理</button></div>')});
-pendingToday.forEach(function(o){tasks.push('<div class="task-item today"><div class="task-info"><span class="task-title">[今日出团] '+esc(o.orderNo)+'</span><span class="task-detail">客户：'+esc(o.customerName)+' | 人数：'+esc(o.pax)+'人 | 导游：'+esc(getGuideName(getTourGroup(o.tourGroupId)?getTourGroup(o.tourGroupId).guideId:''))+'</span></div><button class="btn btn-sm btn-primary" data-action="view-order" data-id="'+o.id+'">查看详情</button></div>')});
-upcoming.forEach(function(o){tasks.push('<div class="task-item upcoming"><div class="task-info"><span class="task-title">[即将出团] '+esc(o.orderNo)+'</span><span class="task-detail">出发日期：'+esc(o.departureDate)+' | 人数：'+esc(o.pax)+'人</span></div><button class="btn btn-sm btn-primary" data-action="view-order" data-id="'+o.id+'">查看详情</button></div>')});
-pendingQuote.filter(function(o){return o.createdAt>=ma}).forEach(function(o){tasks.push('<div class="task-item pending"><div class="task-info"><span class="task-title">[未签约] '+esc(o.orderNo)+'</span><span class="task-detail">客户：'+esc(o.customerName)+' | 线路：'+esc(getTourRouteName(o.tourGroupId))+'</span></div><button class="btn btn-sm btn-secondary" data-action="view-order" data-id="'+o.id+'">去处理</button></div>')});
-if(tasks.length===0)html+='<div class="empty">今日暂无待处理事项</div>';else html+=tasks.join('');
-html+='</div>';
+html+='<div id="todoBoardWrap">'+renderTodoBoard()+'</div>';
 html+='<div class="stats-grid">';
 html+='<div class="stat-card"><div class="stat-icon" style="background:var(--warning)">'+ICONS.doc+'</div><div class="stat-info"><div class="value" style="color:var(--warning)">'+pendingQuote.length+'</div><div class="label">未签约订单</div></div></div>';
 var needArrange=tourGroups.filter(function(t){return computeTourStatus(t)==='招募中'&&t.departureDate<=in3}).length;
@@ -986,17 +1144,10 @@ html+='<div class="stat-card"><div class="stat-icon" style="background:var(--suc
 html+='<div class="stat-card"><div class="stat-icon" style="background:#8b5cf6">'+ICONS.account+'</div><div class="stat-info"><div class="value" style="color:#8b5cf6">'+onTour+'</div><div class="label">在团游客数</div></div></div>';
 html+='</div>';
 html+='<div class="card"><div class="card-title">今日出团列表</div>';
-var todayTours=orders.filter(function(o){return o.departureDate===td});
-if(todayTours.length===0){html+='<div class="empty">今日无出团安排</div>'}
-else{html+='<div class="table-wrap"><table><thead><tr><th>团号</th><th>线路名</th><th>人数</th><th>导游姓名</th><th>操作</th></tr></thead><tbody>';
-todayTours.forEach(function(o){var tg=getTourGroup(o.tourGroupId);html+='<tr><td>'+esc(o.orderNo)+'</td><td>'+esc(getTourRouteName(o.tourGroupId))+'</td><td>'+esc(o.pax)+'人</td><td>'+esc(getGuideName(tg?tg.guideId:''))+'</td><td><button class="btn btn-sm btn-primary" data-action="view-order" data-id="'+o.id+'">详情</button></td></tr>'});
-html+='</tbody></table></div>'}
-html+='</div>';
-html+='<div class="card"><div class="card-title">最新待办订单</div>';
-var pending=orders.filter(function(o){return o.status==='未签约'}).slice(0,10);
-if(pending.length===0){html+='<div class="empty">暂无待办订单</div>'}
-else{html+='<div class="table-wrap"><table><thead><tr><th>订单编号</th><th>客户名</th><th>线路</th><th>状态</th><th>操作</th></tr></thead><tbody>';
-pending.forEach(function(o){html+='<tr><td>'+esc(o.orderNo)+'</td><td>'+esc(o.customerName)+'</td><td>'+esc(getTourRouteName(o.tourGroupId))+'</td><td>'+statusBadge(o.status)+'</td><td><button class="btn btn-sm btn-primary" data-action="view-order" data-id="'+o.id+'">详情</button></td></tr>'});
+var depGroups=tourGroups.filter(function(t){return t.departureDate===td});
+if(depGroups.length===0){html+='<div class="empty">今日无出团安排</div>'}
+else{html+='<div class="table-wrap"><table><thead><tr><th>团号</th><th>线路名</th><th>预订人数</th><th>导游姓名</th><th>操作</th></tr></thead><tbody>';
+depGroups.forEach(function(tg){html+='<tr><td>'+esc(tg.tourNo)+'</td><td>'+esc(tg.routeName)+'</td><td>'+esc(tourBookedPax(tg))+'人</td><td>'+esc(getGuideName(tg.guideId))+'</td><td><button class="btn btn-sm btn-primary" data-action="view-tour" data-id="'+tg.id+'">详情</button></td></tr>'});
 html+='</tbody></table></div>'}
 html+='</div>';
 html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">';
@@ -1210,8 +1361,10 @@ function deleteTour(id){showConfirm('确定删除该团期？将一并清除该�
   DB.finVouchers=DB.finVouchers.filter(function(v){return v.tourGroupId!==id});
   saveData();renderTour();showToast('团期及关联成本付款已删除','success')})}
 function viewTour(id){var t=getTourGroup(id);if(!t)return;
+/* 今日出团的团期，进入详情时自动转为收客结束（当天已出发，收客自然终止，无需手动结束） */
+if(t.departureDate===today()&&!t.recruitClosed){t.recruitClosed=true;saveData();}
 var html='<div class="form-row"><div class="form-group"><label>团号</label><div style="padding:8px 0;font-weight:600">'+esc(t.tourNo)+'</div></div><div class="form-group"><label>线路名称</label><div style="padding:8px 0;font-weight:600">'+esc(t.routeName)+'</div></div></div>';
-html+='<div class="form-row"><div class="form-group"><label>出发时间</label><div style="padding:8px 0">'+esc(fmtDateCn(t.departureDate)||'--')+'</div></div><div class="form-group"><label>送团日期</label><div style="padding:8px 0">'+esc(fmtDateCn(t.sendOffTime)||'--')+'</div></div><div class="form-group"><label>天数</label><div style="padding:8px 0">'+esc(t.duration)+'天</div></div><div class="form-group"><label>参考价</label><div style="padding:8px 0">'+fmtMoney(t.price)+'</div></div><div class="form-group"><label>保险</label><div style="padding:8px 0">'+(t.insuranceSupplierId?esc(getSupplierInfo(t.insuranceSupplierId)):'--')+'</div></div><div class="form-group"><label>状态</label><div style="padding:8px 0">'+tourStatusBadge(t)+'</div></div></div>';
+html+='<div class="form-row"><div class="form-group"><label>出发时间</label><div style="padding:8px 0">'+esc(fmtDateCn(t.departureDate)||'--')+'</div></div><div class="form-group"><label>送团日期</label><div style="padding:8px 0">'+esc(fmtDateCn(t.sendOffTime)||'--')+'</div></div><div class="form-group"><label>天数</label><div style="padding:8px 0">'+esc(t.duration)+'天</div></div><div class="form-group"><label>参考价</label><div style="padding:8px 0">'+fmtMoney(t.price)+'</div></div><div class="form-group"><label>保险</label><div style="padding:8px 0">'+(t.insuranceSupplierId?esc(getSupplierInfo(t.insuranceSupplierId)):'--')+'</div></div><div class="form-group"><label>状态</label><div style="padding:8px 0">'+tourStatusBadge(t)+(t.recruitClosed?' <span class="badge badge-red">收客已结束</span>':' <span class="badge badge-green">收客中</span>')+'</div></div></div>';
 html+='<div class="form-group"><label>导游</label><div style="padding:8px 0">'+esc(guideNameOrNone(t.guideId))+'</div></div>';
 html+='<div class="form-row"><div class="form-group"><label>领队</label><div style="padding:8px 0">'+esc(guideNameOrNone(t.leaderId))+'</div></div><div class="form-group"><label>全陪</label><div style="padding:8px 0">'+esc(guideNameOrNone(t.fullGuideId))+'</div></div></div>';
 var _tids=t.transportSupplierIds||[];
@@ -2748,6 +2901,7 @@ html+='<tr style="background:#f8fafc;font-weight:700;font-size:15px"><td colspan
 html+='</tbody></table></div></div>'}
 html+='<div class="plan-footer"><p>旅行社名称：________________________</p><p>计调员：'+esc(currentUser.name)+'</p><p>日期：'+today()+'</p></div>';
 html+='</div>';
+tg.planGenerated=true;saveData();
 showPrintDoc('出团计划书 - '+esc(tg.tourNo),html)}
 /* 打印层 */
 function showPrintDoc(title,bodyHtml,kind){
@@ -2895,6 +3049,7 @@ html+='<div class="tc-block"><div class="tc-block-head">六、备注</div>';
 
 html+='<div class="tc-signs"><span>旅行社（盖章）：<span class="sign-line" contenteditable="true"></span></span><span>日期：<span class="sign-line" contenteditable="true">'+today()+'</span></span></div></div>';
 html+='</div>';
+ord.confirmGenerated=true;saveData();
 showPrintDoc('旅游团队确认书 - '+esc(ord.orderNo),html,'confirm');
 tcOrderId=orderId;
 }
@@ -2981,6 +3136,8 @@ var o=DB.orders.find(function(x){return x.id===orderId});if(!o){showToast('订�
 if(currentUser.role!=='teacher'&&o.createdBy!==currentUser.id){showToast('无权操作该订单合同','error');return}
 var exist=DB.contracts.find(function(x){return x.orderId===orderId});
 if(exist){openContract(exist.id);return}
+var _qReceipts=DB.finReceipts.filter(function(r){return r.orderId===orderId&&r.status==='已收'&&(r.kind==='定金'||r.kind==='全款'||r.kind==='分期')});
+if(_qReceipts.length===0){showToast('请先收取定金 / 全款 / 分期款项后，再签署旅游合同','error');return}
 var _b=getBoundAgency();
 var c={id:genId('c'),orderId:orderId,contractNo:'HT'+(o.orderNo||'').replace(/^ORD/,''),partyA:o.customerName,partyB:(_b?_b.name:AGENCY_NAME),partyBAddress:(_b?_b.address:''),partyBCredit:(_b?_b.creditCode:''),partyBLegal:(_b?_b.legalName:''),signedDate:today(),status:'已签',createdBy:currentUser.id,createdAt:today()};
 DB.contracts.push(c);
@@ -3136,6 +3293,7 @@ case'generate-plan':generateTourPlan(id);break;
 case'close-recruit':toggleRecruit(id,true,el.dataset.src);break;
 case'reopen-recruit':toggleRecruit(id,false,el.dataset.src);break;
 case'generate-confirm':generateTeamConfirm(id);break;
+case'todo-filter':todoFilter=id;var _tw=$('todoBoardWrap');if(_tw)_tw.innerHTML=renderTodoBoard();break;
 case'sign-contract':signContract(id);break;
 case'view-contract':openContract(id);break;
 case'refresh-contract':refreshDocData();break;
