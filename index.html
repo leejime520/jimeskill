@@ -623,7 +623,7 @@ textarea:focus{border-color:var(--primary)}
 .fin-report-foot{font-size:12px;color:#94a3b8;text-align:center;margin-top:16px}
 @media print{.print-layer .layer-body{max-width:100%;margin:0;padding:0;box-shadow:none;min-height:0}.fin-report-sheet{max-width:none;width:100%;padding:0}.fin-report-title{color:#000}.fin-stmt{width:100%;font-size:11px;table-layout:fixed}.fin-stmt th,.fin-stmt td{padding:4px 5px;word-break:break-all;overflow-wrap:anywhere}.fin-stmt th{background:#eee!important}.pager{display:none!important}.fin-link{text-decoration:none;color:inherit}}
 </style>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Supabase 客户端已内置（fetch 直连 REST），不再依赖任何外部 CDN -->
 </head>
 <body>
 <!-- Login Screen -->
@@ -687,9 +687,41 @@ var DB_KEY='wb_tour_platform';
 /* ===== Supabase 云端共享配置（请替换为你的项目地址与 anon key）===== */
 var SUPABASE_URL='https://cniedqvhdgyaikculwpt.supabase.co';
 var SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNuaWVkcXZoZGd5YWlrY3Vsd3B0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYzNjI1OTUsImV4cCI6MjEwMTkzODU5NX0.ZSU1Rz3zgVuK-ttenm1bWfeRkW6icyDWkuAB0w-Dhr8';
+/* 内置轻量 Supabase REST 客户端（fetch 直连，零外部依赖） */
+function createSB(baseUrl,key){
+  var H={'apikey':key,'Authorization':'Bearer '+key,'Content-Type':'application/json'};
+  function qb(table){
+    var st={table:table,method:'select',cols:'*',filters:[],single:false,body:null};
+    function run(){
+      var base=baseUrl.replace(/\/+$/,'')+'/rest/v1/'+st.table;
+      var qs=[];
+      if(st.method==='select')qs.push('select='+encodeURIComponent(st.cols));
+      st.filters.forEach(function(f){qs.push(encodeURIComponent(f.col)+'='+f.op+'.'+encodeURIComponent(f.val))});
+      var url=base+(qs.length?'?'+qs.join('&'):'');
+      var opt={method:st.method==='select'?'GET':(st.method==='delete'?'DELETE':(st.method==='update'?'PATCH':'POST')),headers:Object.assign({},H)};
+      if(st.method==='upsert'||st.method==='insert'){opt.headers['Prefer']='resolution=merge-duplicates';opt.body=JSON.stringify(Array.isArray(st.body)?st.body:[st.body])}
+      else if(st.method==='update'){opt.body=JSON.stringify(st.body)}
+      return fetch(url,opt).then(function(r){return r.json().then(function(j){var arr=Array.isArray(j)?j:(j?[j]:[]);return {data:st.single?(arr[0]||null):arr,error:r.ok?null:((j&&j.message)||('http_'+r.status))}},function(){return {data:st.single?null:[],error:'parse_error'}})}).catch(function(e){return {data:st.single?null:[],error:e}});
+    }
+    var b={
+      select:function(c){st.method='select';st.cols=c||'*';return b},
+      insert:function(o){st.method='insert';st.body=o;return b},
+      update:function(o){st.method='update';st.body=o;return b},
+      upsert:function(o){st.method='upsert';st.body=o;return b},
+      delete:function(){st.method='delete';return b},
+      eq:function(c,v){st.filters.push({col:c,op:'eq',val:v});return b},
+      like:function(c,v){st.filters.push({col:c,op:'like',val:v});return b},
+      maybeSingle:function(){st.single=true;return b},
+      single:function(){st.single=true;return b},
+      then:function(res,rej){return run().then(res,rej)}
+    };
+    return b;
+  }
+  return {from:function(t){return qb(t)},channel:function(){return {on:function(){return this},subscribe:function(){return {unsubscribe:function(){}}}}}};
+}
 var SB_ID='shared';
 var SB=null;
-try{if(window.supabase)SB=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY)}catch(e){console.warn('Supabase 初始化失败',e)}
+try{SB=createSB(SUPABASE_URL,SUPABASE_ANON_KEY)}catch(e){console.warn('Supabase 初始化失败',e)}
 var SESSION_KEY='wb_tour_session';
 var ICONS={
 dashboard:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
@@ -746,7 +778,7 @@ function today(){return new Date().toISOString().split('T')[0]}
 function daysAgo(n){var d=new Date();d.setDate(d.getDate()-n);return d.toISOString().split('T')[0]}
 function daysFromNow(n){var d=new Date();d.setDate(d.getDate()+n);return d.toISOString().split('T')[0]}
 function showToast(msg,type){type=type||'info';var t=document.createElement('div');t.className='toast toast-'+type;t.textContent=msg;$('toastContainer').appendChild(t);setTimeout(function(){t.classList.add('show')},10);setTimeout(function(){t.classList.remove('show');setTimeout(function(){t.remove()},300)},3000)}
-var SHARED_FIELDS=['users','suppliers','guides','tourGroups','finAccounts','finTaxRates','finExpenseCats','finApprovalTemplates','finBankAccounts','finOpening'];
+var SHARED_FIELDS=['suppliers','guides','tourGroups','finAccounts','finTaxRates','finExpenseCats','finApprovalTemplates','finBankAccounts','finOpening'];
 var PRIVATE_FIELDS=['orders','financeRecords','finReceipts','finPayments','finRefunds','finAdvances','finReimbursements','finGuideReimbursements','finVouchers','finInvoices','finBankFlows','finLogs','finAgencyFees','contracts','agencyBindings'];
 var ALL_FIELDS=SHARED_FIELDS.concat(PRIVATE_FIELDS);
 function normalizeDB(d){
@@ -781,9 +813,26 @@ function migrateLegacyShared(shared){
   PRIVATE_FIELDS.forEach(function(f){shared[f]=[]});
   writeLocalRow(DB_KEY,shared);upsertCloudRow(SB_ID,shared);
 }
+function readRawLocal(key){try{var raw=localStorage.getItem(key);if(raw)return JSON.parse(raw)}catch(e){}return null}
+/* 账号独立存储：每个账号一条云端记录（acct_<id>），教师端聚合读取，避免"后注册覆盖先注册"丢号 */
+async function loadAllAccounts(legacyUsers){
+  var map={};
+  function add(u){if(u&&u.id&&!map[u.id])map[u.id]=u;}
+  if(SB){
+    try{var r=await SB.from('app_state').select('id,data').like('id','acct_%');(r.data||[]).forEach(function(x){if(x&&x.data)add(x.data)})}catch(e){console.warn('云端账号读取失败',e)}
+  }
+  if(Object.keys(map).length===0){
+    try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k&&k.indexOf(DB_KEY+'_acct_')===0){var o=readRawLocal(k);if(o)add(o)}}}catch(e){console.warn('本地账号读取失败',e)}
+  }
+  (legacyUsers||[]).forEach(add);
+  var list=Object.keys(map).map(function(k){return map[k]});
+  if(list.length===0)list=getDefaultUsers();
+  return list;
+}
 async function loadData(){
   var shared=await readCloudRow(SB_ID)||readLocalRow(DB_KEY)||getDefaultData();
   migrateLegacyShared(shared);
+  var legacyUsers=(shared&&Array.isArray(shared.users))?shared.users:[];
   var d=_sharedPart(shared);
   PRIVATE_FIELDS.forEach(function(f){d[f]=[]});
   var collect=function(dd){PRIVATE_FIELDS.forEach(function(f){(dd[f]||[]).forEach(function(rec){d[f].push(rec)})})};
@@ -794,6 +843,7 @@ async function loadData(){
     var mine=await readCloudRow('user_'+currentUser.id)||readLocalRow(DB_KEY+'_user_'+currentUser.id)||{};
     PRIVATE_FIELDS.forEach(function(f){d[f]=(mine[f]||[])});
   }
+  d.users=await loadAllAccounts(legacyUsers);
   return d;
 }
 /* 教师账号保护网：确保教师账号永远存在于系统、不可被移除、密码不被篡改 */
@@ -811,9 +861,11 @@ function saveData(){
   PRIVATE_FIELDS.forEach(function(f){(DB[f]||[]).forEach(function(rec){var k='user_'+(rec.createdBy||'anon');if(!groups[k]){groups[k]={};PRIVATE_FIELDS.forEach(function(g){groups[k][g]=[]})}groups[k][f].push(rec)})});
   if(currentUser&&!groups['user_'+currentUser.id]){var eg={};PRIVATE_FIELDS.forEach(function(g){eg[g]=[]});groups['user_'+currentUser.id]=eg;}
   Object.keys(groups).forEach(function(k){writeLocalRow(DB_KEY+'_'+k,groups[k]);upsertCloudRow(k,groups[k])});
+  /* 账号独立持久化：每条账号写一条 acct_<id> 记录，避免整数组覆盖丢号 */
+  (DB.users||[]).forEach(function(u){var row=Object.assign({},u);row.updated_at=new Date().toISOString();writeLocalRow(DB_KEY+'_acct_'+u.id,row);upsertCloudRow('acct_'+u.id,row)});
 }
 function updateSyncStatus(){var bar=$('cloudSyncBar');if(!bar||!bar.classList.contains('show'))return;var txt=$('syncStatusText');if(txt)txt.textContent='已同步 '+new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});var dot=bar.querySelector('.cloud-sync-dot');if(dot)dot.classList.remove('syncing')}
-function subscribeRealtime(){if(!SB)return;try{SB.channel('appstate-all').on('postgres_changes',{event:'*',schema:'public',table:'app_state'},function(){if(!document.querySelector('.modal')&&$('mainApp').style.display!=='none'){loadData().then(function(d){if(d){DB=d;showPage(currentPage);updateSyncStatus();refreshOpenDoc()}})}}).subscribe()}catch(e){console.warn('Realtime 订阅失败',e)}}
+function subscribeRealtime(){if(!SB)return;setInterval(function(){if(!document.querySelector('.modal')&&$('mainApp').style.display!=='none'){loadData().then(function(d){if(d){DB=d;showPage(currentPage);updateSyncStatus();refreshOpenDoc()}}).catch(function(){})}},15000)}
 function getSession(){try{return JSON.parse(sessionStorage.getItem(SESSION_KEY))}catch(e){return null}}
 function setSession(u){sessionStorage.setItem(SESSION_KEY,JSON.stringify({id:u.id,username:u.username,role:u.role,name:u.name}))}
 function clearSession(){sessionStorage.removeItem(SESSION_KEY)}
@@ -873,12 +925,15 @@ function _modalDragEnd(){_modalDrag=null}
 function showConfirm(msg,cb){confirmCb=cb;openModal('确认操作','<div style="padding:12px 0;font-size:15px">'+msg+'</div>','<button class="btn btn-danger" data-action="confirm-yes">确认</button><button class="btn btn-secondary" data-action="close-modal">取消</button>')}
 function downloadFile(content,filename,mime){var blob=new Blob([content],{type:(mime||'text/plain')+';charset=utf-8'});var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url)}
 /* Default Data */
-function getDefaultData(){
-var users=[
+function getDefaultUsers(){
+return [
 {id:'u1',username:'admin',password:'123@456',role:'teacher',name:'教师管理员',studentId:'',createdAt:'2026-01-01',isSample:true},
 {id:'u2',username:'student1',password:'123456',role:'student',name:'张三',studentId:'2024001',createdAt:'2026-01-01',isSample:true},
 {id:'u3',username:'student2',password:'123456',role:'student',name:'李四',studentId:'2024002',createdAt:'2026-01-01',isSample:true}
 ];
+}
+function getDefaultData(){
+var users=getDefaultUsers();
 var suppliers=[
 {id:'s1',type:'酒店',name:'昆明云投饭店',contact:'王经理',phone:'13800001111',address:'昆明市盘龙区东风东路88号',remark:'四星级 含早',productName:'标准双人间',unitPrice:280,createdBy:'u1',isSample:true},
 {id:'s2',type:'酒店',name:'大理风花雪月酒店',contact:'李经理',phone:'13800002222',address:'大理市古城区复兴路126号',remark:'五星级 海景房',productName:'海景大床房',unitPrice:480,createdBy:'u1',isSample:true},
@@ -1812,6 +1867,8 @@ function finClearStudents(){
     ids.forEach(function(uid){
       try{localStorage.removeItem(DB_KEY+'_user_'+uid)}catch(e){}
       deleteCloudRow('user_'+uid);
+      try{localStorage.removeItem(DB_KEY+'_acct_'+uid)}catch(e){}
+      deleteCloudRow('acct_'+uid);
     });
     saveData();
     showToast('已删除 '+students.length+' 个学生账号并清空其数据','success');
@@ -2856,7 +2913,7 @@ showConfirm('确定将该学生密码重置为 123456？',function(){var u=DB.us
 function deleteAccount(id){
 var _u=DB.users.find(function(x){return x.id===id});
 if(_u&&(_u.role==='teacher'||_u.id==='u1'||_u.username==='admin')){showToast('教师主账号为系统内置账号，不可删除','error');return}
-showConfirm('确定删除该学生账号及其所有数据？此操作不可恢复！',function(){PRIVATE_FIELDS.forEach(function(f){if(DB[f])DB[f]=DB[f].filter(function(x){return x.createdBy!==id})});DB.users=DB.users.filter(function(u){return u.id!==id});saveData();deleteCloudRow('user_'+id);try{localStorage.removeItem(DB_KEY+'_user_'+id)}catch(e){}renderAccount();showToast('账号已删除','success')})}
+showConfirm('确定删除该学生账号及其所有数据？此操作不可恢复！',function(){PRIVATE_FIELDS.forEach(function(f){if(DB[f])DB[f]=DB[f].filter(function(x){return x.createdBy!==id})});DB.users=DB.users.filter(function(u){return u.id!==id});saveData();deleteCloudRow('user_'+id);try{localStorage.removeItem(DB_KEY+'_user_'+id)}catch(e){}deleteCloudRow('acct_'+id);try{localStorage.removeItem(DB_KEY+'_acct_'+id)}catch(e){}renderAccount();showToast('账号已删除','success')})}
 /* Tour Plan Generation */
 function generateTourPlan(tourId){
 var tg=getTourGroup(tourId);if(!tg){showToast('团期不存在','error');return}
