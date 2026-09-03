@@ -756,7 +756,8 @@ voucher:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width
 vchPrev:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
   vchNext:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>',
   chevronRight:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>',
-  chevronDown:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>'
+  chevronDown:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>',
+  cancel:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>'
 };
 var PAGES={
 dashboard:{title:'工作台首页',icon:'dashboard'},
@@ -1585,7 +1586,7 @@ tours.forEach(function(t){
 var _ototal=shownTours.length,_oper=F_order.perPage,_otp=Math.max(1,Math.ceil(_ototal/_oper));if(F_order.page>_otp)F_order.page=_otp;var _ost=(F_order.page-1)*_oper;var _opg=shownTours.slice(_ost,_ost+_oper);
 if(_opg.length===0){html+='<div class="empty">'+ICONS.tour+'<p>'+(tours.length===0?'暂无团期数据，请先在「行程管理」创建团期':'没有匹配的团期或订单')+'</p></div>'}
 else{_opg.forEach(function(item){var t=item.t,displayOrders=item.displayOrders;
-  var allPax=orders.filter(function(o){return o.tourGroupId===t.id}).reduce(function(sum,o){return sum+(parseInt(o.pax)||0)},0);
+  var allPax=orders.filter(function(o){return o.tourGroupId===t.id && o.status!=='已取消'}).reduce(function(sum,o){return sum+(parseInt(o.pax)||0)},0);
   var cap=parseInt(t.maxPax)||0;var remain=cap-allPax;
   var badge=t.recruitClosed?'<span class="badge badge-red">收客已结束</span>':(cap>0&&remain<=0?'<span class="badge badge-amber">已满位</span>':'');
   var isOpen=!!ORDER_EXPANDED[t.id]||!!s;
@@ -1596,7 +1597,7 @@ else{_opg.forEach(function(item){var t=item.t,displayOrders=item.displayOrders;
   html+='<div class="tog-body'+(isOpen?' open':'')+'">';
   if(displayOrders.length===0){html+='<div class="empty" style="padding:18px">暂无关联订单</div>'}
   else{  html+='<div class="table-wrap"><table><thead><tr><th>订单编号</th><th>客户姓名</th><th>联系电话</th><th>人数</th><th>销售门店</th><th>销售人员</th><th>状态</th><th>应收</th><th>已收</th><th>操作</th></tr></thead><tbody>';
-  displayOrders.forEach(function(o){html+='<tr><td>'+esc(o.orderNo)+'</td><td>'+esc(o.customerName)+'</td><td>'+esc(o.contactPhone)+'</td><td>'+esc(o.pax)+'</td><td>'+(o.storeName?esc(o.storeName):'--')+'</td><td>'+(o.salesName?esc(o.salesName):'--')+'</td><td>'+statusBadge(o.status)+'</td><td>'+finMoney(o.finReceivable||0)+'</td><td>'+finMoney(o.finIncome||0,'var(--success)')+'</td><td><button class="btn-icon" data-action="view-order" data-id="'+o.id+'" title="详情">'+ICONS.eye+'</button><button class="btn-icon" data-action="edit-order" data-id="'+o.id+'" title="编辑">'+ICONS.edit+'</button><button class="btn-icon" data-action="delete-order" data-id="'+o.id+'" title="删除">'+ICONS.del+'</button><button class="btn-icon" data-action="generate-confirm" data-id="'+o.id+'" title="生成团队确认单">'+ICONS.doc+'</button></td></tr>'});
+  displayOrders.forEach(function(o){html+='<tr><td>'+esc(o.orderNo)+'</td><td>'+esc(o.customerName)+'</td><td>'+esc(o.contactPhone)+'</td><td>'+esc(o.pax)+'</td><td>'+(o.storeName?esc(o.storeName):'--')+'</td><td>'+(o.salesName?esc(o.salesName):'--')+'</td><td>'+statusBadge(o.status)+'</td><td>'+finMoney(o.finReceivable||0)+'</td><td>'+finMoney(o.finIncome||0,'var(--success)')+'</td><td><button class="btn-icon" data-action="view-order" data-id="'+o.id+'" title="详情">'+ICONS.eye+'</button><button class="btn-icon" data-action="edit-order" data-id="'+o.id+'" title="编辑">'+ICONS.edit+'</button>'+(o.status!=='已取消'?'<button class="btn-icon" data-action="cancel-order" data-id="'+o.id+'" title="取消订单">'+ICONS.cancel+'</button>':'')+'<button class="btn-icon" data-action="generate-confirm" data-id="'+o.id+'" title="生成团队确认单">'+ICONS.doc+'</button></td></tr>'});
   html+='</tbody></table></div>'}
   html+='</div></div>';
 });}
@@ -1631,7 +1632,7 @@ var data={customerName:cn,contactPhone:cp,idCard:ic,pax:parseInt($('of_pax').val
 if(id){var o=DB.orders.find(function(x){return x.id===id});data.status=o.status;Object.assign(o,data);finEnsureEstimate(o);showToast('订单已更新','success')}
 else{data.id=genId('o');data.orderNo='ORD'+today().replace(/-/g,'').slice(2)+String(Date.now()).slice(-4);data.status='未签约';data.createdBy=currentUser.id;data.createdAt=today();DB.orders.push(data);finEnsureEstimate(data);showToast('订单已创建','success')}
 saveData();closeModal();renderOrder()}
-function deleteOrder(id){var _od=DB.orders.find(function(x){return x.id===id});if(_od&&currentUser.role!=='teacher'&&_od.createdBy!==currentUser.id){showToast('无权删除该订单','error');return}showConfirm('确定删除该订单及关联的团队成员、合同与全部财务记录（收款/退款/发票/凭证/台账）？',function(){DB.orders=DB.orders.filter(function(o){return o.id!==id});DB.financeRecords=DB.financeRecords.filter(function(f){return f.orderId!==id});DB.finReceipts=(DB.finReceipts||[]).filter(function(f){return f.orderId!==id});DB.finRefunds=(DB.finRefunds||[]).filter(function(f){return f.orderId!==id});DB.finInvoices=(DB.finInvoices||[]).filter(function(f){return f.orderId!==id});DB.finVouchers=(DB.finVouchers||[]).filter(function(f){return f.orderId!==id});DB.contracts=(DB.contracts||[]).filter(function(f){return f.orderId!==id});saveData();renderOrder();showToast('订单已删除','success')})}
+function cancelOrder(id){var o=DB.orders.find(function(x){return x.id===id});if(!o){showToast('订单不存在','error');return}if(currentUser.role!=='teacher'&&o.createdBy!==currentUser.id){showToast('无权取消该订单','error');return}if(o.status==='已取消'){showToast('该订单已取消','error');return}if(o.status==='已出团'||o.status==='已完成'){showToast('该订单已'+o.status+'，无法取消','error');return}var _ra=finReceiptsOf(o).filter(function(r){return r.status!=='已作废'}).reduce(function(s,r){return s+(r.amount||0)},0);showConfirm('确定取消订单「'+(o.orderNo||'')+'」吗？取消后状态置为「已取消」（保留记录），团期座位自动释放，关联合同一并作废'+( _ra>0?('，已收 '+fmtMoney(_ra)+' 将生成退团退款单冲减收入'):'')+'。',function(){closeModal();o.status='已取消';var c=DB.contracts.find(function(x){return x.orderId===id&&x.status!=='已作废'});if(c){c.status='已作废';c.voidDate=today();}if(_ra>0){var _rf={id:genId('rf'),orderId:id,customerName:o.customerName,refundType:'退团退款',amount:_ra,method:'原路退回',handler:currentUser.name||'',date:today(),status:'已退',createdBy:currentUser.id};DB.finRefunds.push(_rf);DB.financeRecords.push({id:genId('f'),orderId:id,type:'支出',category:'退款(退团退款)',amount:_ra,date:_rf.date,description:'退'+o.customerName+'('+(o.orderNo||'')+')·取消订单退款',createdBy:currentUser.id});var _rtg=getTourGroup(o.tourGroupId);finMakeVoucher(_rf.date, finVchSum('退还', _rtg?_rtg.tourNo:o.customerName, '退团退款'), [{account:'2203预收账款—预收团费（订金/尾款）',debit:_ra,credit:0},{account:'1002银行存款—团费结算户',debit:0,credit:_ra}]);finLog('取消订单退款',(o.orderNo||'')+' 退团退款'+fmtMoney(_ra));}saveData();if(currentPage==='dashboard')renderDashboard();else if(currentPage==='finance')renderFinance();else{renderOrder();var _tb=document.getElementById('todoBoardWrap');if(_tb)_tb.innerHTML=renderTodoBoard();}showToast('订单已取消，座位已释放'+( _ra>0?('，已生成退款 '+fmtMoney(_ra)):''),'success')})}
 function viewOrder(id){var o=DB.orders.find(function(x){return x.id===id});if(!o)return;if(currentUser.role!=='teacher'&&o.createdBy!==currentUser.id){showToast('无权查看该订单','error');return}var tg=getTourGroup(o.tourGroupId);
 var html='<div class="form-row"><div class="form-group"><label>订单编号</label><div style="padding:8px 0;font-weight:600">'+esc(o.orderNo)+'</div></div><div class="form-group"><label>客户姓名</label><div style="padding:8px 0;font-weight:600">'+esc(o.customerName)+'</div></div></div>';
 var paxInfo=esc(o.pax)+'人';if(o.teamMembers&&o.teamMembers.length>0){var ad=0,cd=0,cf=0;o.teamMembers.forEach(function(m){var tt=m.travelerType||'成人';if(tt==='成人')ad++;else if(tt==='免票')cf++;else cd++});paxInfo=esc(o.pax)+'人 (';if(ad>0)paxInfo+='成人'+ad;if(cd>0)paxInfo+=' 优惠'+cd;if(cf>0)paxInfo+=' 免票'+cf;paxInfo+=')'}
@@ -1643,7 +1644,7 @@ if(o.teamMembers&&o.teamMembers.length>0){html+='<div class="table-wrap"><table>
 o.teamMembers.forEach(function(m){html+='<tr><td>'+esc(m.name)+'</td><td><span class="badge '+(m.travelerType==='成人'?'badge-blue':(m.travelerType==='免票'?'badge-gray':'badge-green'))+'">'+esc(m.travelerType||'成人')+'</span></td><td>'+esc(m.gender)+'</td><td>'+esc(m.age)+'</td><td>'+esc(m.idType)+'</td><td style="font-size:12px">'+esc(m.idNumber)+'</td><td>'+esc(m.phone)+'</td><td>'+(m.remark?esc(m.remark):'占床')+'</td></tr>'});
 html+='</tbody></table></div>'}else{html+='<div class="empty">暂无团队成员</div>'}
 html+='</div>';
-openModal('订单详情',html,'<button class="btn btn-primary" data-action="generate-confirm" data-id="'+o.id+'">'+ICONS.doc+' 生成团队确认单</button><button class="btn btn-secondary" data-action="close-modal">关闭</button>',true)}
+openModal('订单详情',html,'<button class="btn btn-primary" data-action="generate-confirm" data-id="'+o.id+'">'+ICONS.doc+' 生成团队确认单</button>'+(o.status!=='已取消'?'<button class="btn btn-danger" data-action="cancel-order" data-id="'+o.id+'">取消订单</button>':'')+'<button class="btn btn-secondary" data-action="close-modal">关闭</button>',true)}
 function renderOrderFormMembers(){
   var box=$('of_members_box');if(!box)return;
   var list=_orderFormMembers;var html='';
@@ -3425,7 +3426,7 @@ case'edit-order':showOrderForm(id);break;
 case'order-toggle':ORDER_EXPANDED[el.dataset.id]=!ORDER_EXPANDED[el.dataset.id];renderOrder();break;
 case'view-order':viewOrder(id);break;
 case'save-order':saveOrder(id);break;
-case'delete-order':deleteOrder(id);break;
+case'cancel-order':cancelOrder(id);break;
 case'of-add-member':openMemberModal(null);break;
 case'of-edit-member':openMemberModal(id);break;
 case'of-del-member':deleteMember(id);break;
@@ -3550,7 +3551,7 @@ case'fin-new-bank':showFinBankForm(null);break;
 case'fin-edit-bank':showFinBankForm(id);break;
 case'fin-del-bank':finDelBank(id);break;
 case'fin-save-bank':finSaveBank(id);break;
-case'fin-save-opening':DB.finOpening={cash:Math.round((parseFloat($('opCash').value)||0)*100)/100,fixedAssets:Math.round((parseFloat($('opFixed').value)||0)*100)/100,paidInCapital:Math.round((parseFloat($('opCapital').value)||0)*100)/100};saveData();renderFinance();showToast('已保存期初余额（库存现金 ¥'+fmtMoney(DB.finOpening.cash)+' / 固定资产 ¥'+fmtMoney(DB.finOpening.fixedAssets)+' / 实收资本 ¥'+fmtMoney(DB.finOpening.paidInCapital)+'）','success');break;
+case'fin-save-opening':DB.finOpening={cash:Math.round((parseFloat($('opCash').value)||0)*100)/100,fixedAssets:Math.round((parseFloat($('opFixed').value)||0)*100)/100,paidInCapital:Math.round((parseFloat($('opCapital').value)||0)*100)/100};saveData();renderFinance();showToast('已保存期初余额（库存现金 '+fmtMoney(DB.finOpening.cash)+' / 固定资产 '+fmtMoney(DB.finOpening.fixedAssets)+' / 实收资本 '+fmtMoney(DB.finOpening.paidInCapital)+'）','success');break;
 default:break}}
 function showMainApp(){$('loginScreen').style.display='none';$('mainApp').style.display='flex';if(SB)subscribeRealtime();try{syncAllPayables();saveData()}catch(e){console.warn('syncPayables',e)}renderSidebar();showPage('dashboard');setInterval(liveRefreshBoard,3000)}
 function enterApp(){loadData().then(function(d){if(d)DB=d;showMainApp()}).catch(function(){showMainApp()})}
