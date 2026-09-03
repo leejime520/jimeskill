@@ -1250,9 +1250,12 @@ $('pageContent').innerHTML=html}
    实现"看板数据随各项数据变化实时更新"（同时覆盖本地编辑与云端多端同步两种来源）。仅在数据真正变化时才重绘，避免无谓闪烁/滚动重置。 */
 var _lastBoardSig='';
 function boardSignature(){
-  var ords=getVisibleData('orders'),tgs=getVisibleData('tourGroups'),fins=getVisibleData('financeRecords'),pays=getVisibleData('finPayments'),recs=getVisibleData('finReceipts');
+  var ords=getVisibleData('orders'),tgs=getVisibleData('tourGroups'),fins=getVisibleData('financeRecords'),pays=getVisibleData('finPayments'),recs=getVisibleData('finReceipts'),cts=getVisibleData('contracts');
   var sum=0;fins.forEach(function(f){sum+=(f.amount||0)});
-  return [ords.length,tgs.length,fins.length,pays.length,recs.length,Math.round(sum*100)/100].join('|');
+  /* 纳入订单状态与合同状态，使"仅状态变化（签约/作废）"也能被实时刷新捕获，驱动首页流程节点更新 */
+  var ostat=ords.map(function(o){return o.id+'='+(o.status||'')}).join(',');
+  var cstat=(cts||[]).map(function(c){return c.id+'='+(c.status||'')}).join(',');
+  return [ords.length,tgs.length,fins.length,pays.length,recs.length,Math.round(sum*100)/100,ostat,cstat].join('|');
 }
 function liveRefreshBoard(){
   var ov=document.getElementById('modalOverlay');
@@ -2891,15 +2894,27 @@ function showFinBankForm(id){var a=id?DB.finBankAccounts.find(function(x){return
 function finSaveBank(id){var name=$('ffb_name').value.trim();if(!name){showToast('账户名称必填','error');return}var rec={name:name,bank:$('ffb_bank').value.trim(),accountNo:$('ffb_accountNo').value.trim(),currency:($('ffb_currency').value.trim()||'CNY'),balance:parseFloat($('ffb_balance').value)||0,createdBy:currentUser?currentUser.id:'anon'};if(id){var i=DB.finBankAccounts.findIndex(function(x){return x.id===id});if(i>=0){rec.id=id;DB.finBankAccounts[i]=rec}else DB.finBankAccounts.push(Object.assign({id:genId('ba'),isSample:false},rec))}else{DB.finBankAccounts.push(Object.assign({id:genId('ba'),isSample:false},rec))}saveData();closeModal();showToast('财务账号已保存','success');finLog((id?'编辑':'注册')+'财务账号',name);renderFinance()}
 function finDelBank(id){var a=DB.finBankAccounts.find(function(x){return x.id===id});if(!a)return;showConfirm('确认删除财务账号「'+a.name+'」？删除后账户将不再用于收款付款单据。',function(){DB.finBankAccounts=DB.finBankAccounts.filter(function(x){return x.id!==id});saveData();renderFinance();showToast('已删除','success');finLog('删除财务账号',a.name)})}
 /* Account Management */
+var accountPage=1;
 function renderAccount(){
 if(currentUser.role!=='teacher'){showPage('dashboard');return}
+var PER=20;
+/* 管理员账号（id=u1 或 username=admin）永远置顶第一行，其余按原顺序 */
+var _users=DB.users.slice();
+var _ai=_users.findIndex(function(u){return u.id==='u1'||u.username==='admin'});
+if(_ai>0){var _admin=_users.splice(_ai,1)[0];_users.unshift(_admin);}
+var _total=_users.length;
+var _tp=Math.max(1,Math.ceil(_total/PER));
+if(accountPage>_tp)accountPage=_tp;if(accountPage<1)accountPage=1;
+var _start=(accountPage-1)*PER;
+var _pageUsers=_users.slice(_start,_start+PER);
 var html='<div class="card"><div class="card-title">账号管理 <span style="font-size:13px;color:var(--text-light);font-weight:400">教师可管理所有学生实训账号</span></div>';
 html+='<div class="table-wrap"><table><thead><tr><th>用户名</th><th>姓名</th><th>角色</th><th>学号</th><th>创建时间</th><th>创建数据</th><th>操作</th></tr></thead><tbody>';
-DB.users.forEach(function(u){var oc=DB.orders.filter(function(o){return o.createdBy===u.id}).length;var fc=DB.financeRecords.filter(function(f){return f.createdBy===u.id}).length;var gc=(DB.guides||[]).filter(function(g){return g.createdBy===u.id}).length;
+_pageUsers.forEach(function(u){var oc=DB.orders.filter(function(o){return o.createdBy===u.id}).length;var fc=DB.financeRecords.filter(function(f){return f.createdBy===u.id}).length;var gc=(DB.guides||[]).filter(function(g){return g.createdBy===u.id}).length;
 html+='<tr><td>'+esc(u.username)+'</td><td>'+esc(u.name)+'</td><td><span class="role-badge '+(u.role==='teacher'?'badge-teacher':'badge-student')+'">'+(u.role==='teacher'?'教师':'学生')+'</span></td><td>'+esc(u.studentId||'--')+'</td><td>'+esc(u.createdAt)+'</td><td>订单'+oc+'条/财务'+fc+'条/导游'+gc+'条</td><td>';
 if(u.role==='student'){html+='<button class="btn btn-sm btn-secondary" data-action="reset-password" data-id="'+u.id+'">重置密码</button> <button class="btn btn-sm btn-danger" data-action="delete-account" data-id="'+u.id+'">删除</button>'}else{html+='<span style="color:var(--text-light)">主账号</span>'}
 html+='</td></tr>'});
 html+='</tbody></table></div></div>';
+html+=buildPager('acct-page',_total,PER,accountPage);
 html+='<div class="card" style="border:1px solid var(--danger);margin-top:16px"><div class="card-title">结业清班 <span style="font-size:12px;font-weight:400;color:var(--text-light);margin-left:8px">课程结束后清理全部学生</span></div>';
 html+='<div style="font-size:13px;color:var(--text-light);line-height:1.7;margin-bottom:12px">课程结束时，可一键<b style="color:var(--danger)">删除全部学生账号</b>，并清空这些学生创建的所有业务数据（订单、收付款、报销、发票、合同等）。<br>共享档案（供应商、导游、团期、财务基础档案、期初余额）将<b>保留</b>，便于下一期教学复用。</div>';
 html+='<button class="btn btn-danger btn-sm" data-action="fin-clear-students">'+ICONS.del+' 删除所有学生账号并清空其数据</button>';
@@ -3264,6 +3279,7 @@ closeModal();
 showToast('旅游合同已签署，订单「'+esc(o.orderNo)+'」状态已变更为已签约','success');
 renderContract();
 openContract(c.id);
+if(currentPage==='dashboard')renderDashboard();else{var _tb=document.getElementById('todoBoardWrap');if(_tb)_tb.innerHTML=renderTodoBoard();}
 }
 function confirmVoidContract(orderId){
 var o=DB.orders.find(function(x){return x.id===orderId});if(!o){showToast('订单不存在','error');return}
@@ -3275,6 +3291,7 @@ saveData();
 closeModal();
 showToast('合同已作废，订单「'+esc(o.orderNo)+'」恢复为未签约，可重新签署','success');
 renderContract();
+if(currentPage==='dashboard')renderDashboard();else{var _tb=document.getElementById('todoBoardWrap');if(_tb)_tb.innerHTML=renderTodoBoard();}
 }
 function openContract(id){
 var c=DB.contracts.find(function(x){return x.id===id});if(!c){showToast('合同不存在','error');return}
@@ -3439,6 +3456,7 @@ case'refresh-doc':refreshDocData();break;
 case'print-plan':window.print();break;
 case'reset-password':resetPassword(id);break;
 case'delete-account':deleteAccount(id);break;
+case'acct-page':accountPage=Math.max(1,parseInt(el.dataset.page,10)||1);renderAccount();break;
 case'tour-filter':case'tour-search':renderTour();break;
 case'tour-sort':if(F_tour.sortBy!==el.dataset.sort){F_tour.sortBy=el.dataset.sort;F_tour.sortDir='asc'}else{F_tour.sortDir=F_tour.sortDir==='asc'?'desc':'asc'}F_tour.page=1;renderTour();break;
 case'tour-page':F_tour.page=Math.max(1,parseInt(el.dataset.page,10)||1);renderTour();break;
