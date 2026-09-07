@@ -803,6 +803,24 @@ function upsertCloudRow(rowId,data){
   if(!SB)return;
   SB.from('app_state').upsert({id:rowId,data:data,updated_at:new Date().toISOString()}).then(function(res){if(res.error){console.warn('云端保存失败',res.error)}else{updateSyncStatus()}}).catch(function(e){console.warn('云端保存失败',e)});
 }
+/* 账号变更专用：返回 Promise 的可等待写入。
+   关键操作（注册 / 自助找回密码 / 教师重置密码）必须先 await 成功再放行，
+   否则 enterApp() 的 loadData() 会从云端拉回旧账号覆盖内存，随后 saveData() 又把旧密码写回云端，
+   导致新密码只存在于本机 localStorage——当时能登录，换台设备即失效。 */
+function upsertCloudRowAsync(rowId,data){
+  if(!SB)return Promise.reject(new Error('云端未连接'));
+  return SB.from('app_state').upsert({id:rowId,data:data,updated_at:new Date().toISOString()}).then(function(res){
+    if(res.error)throw res.error;
+    try{updateSyncStatus()}catch(e){}
+    return true;
+  });
+}
+function saveAccountCloudAsync(u){
+  if(!u||!u.id)return Promise.resolve(true);
+  var row=Object.assign({},u);row.updated_at=new Date().toISOString();
+  try{writeLocalRow(DB_KEY+'_acct_'+u.id,row)}catch(e){}
+  try{return upsertCloudRowAsync('acct_'+u.id,row)}catch(e){return Promise.reject(e)}
+}
 function deleteCloudRow(rowId){if(!SB)return;try{SB.from('app_state').delete().eq('id',rowId).then(function(res){if(res.error)console.warn('云端删除失败',res.error)})}catch(e){console.warn('云端删除失败',e)}}
 function migrateLegacyShared(shared){
   var po=_privatePart(shared);
@@ -870,7 +888,19 @@ function subscribeRealtime(){if(!SB)return;setInterval(function(){if(!document.q
 function getSession(){try{return JSON.parse(sessionStorage.getItem(SESSION_KEY))}catch(e){return null}}
 function setSession(u){sessionStorage.setItem(SESSION_KEY,JSON.stringify({id:u.id,username:u.username,role:u.role,name:u.name}))}
 function clearSession(){sessionStorage.removeItem(SESSION_KEY)}
-function getVisibleData(type){var data=DB[type]||[];if(!currentUser)return[];if(currentUser.role!=='teacher'&&PRIVATE_FIELDS.indexOf(type)>=0)return data.filter(function(x){return x.createdBy===currentUser.id});return data}
+/* 教师账号 id 集合：教师创建的数据视为对全体学生共享 */
+function _teacherIds(){var m={};(DB.users||[]).forEach(function(u){if(u.role==='teacher'||u.id==='u1'||u.username==='admin')m[u.id]=1});return m}
+/* 可见范围：
+   教师 → 全部数据（含所有学生创建的）
+   学生 → 私有业务数据仅本人；共享档案为「教师共享的 + 本人创建的」，学生之间互相隔离
+   注：createdBy 为空属系统预置/早期教师录入（如会计科目、税率、费用类别），按教师共享处理 */
+function getVisibleData(type){var data=DB[type]||[];if(!currentUser)return[];
+if(currentUser.role!=='teacher'){
+  if(!Array.isArray(data))return data;
+  if(PRIVATE_FIELDS.indexOf(type)>=0)return data.filter(function(x){return x.createdBy===currentUser.id});
+  if(SHARED_FIELDS.indexOf(type)>=0){var _ti=_teacherIds();return data.filter(function(x){return x.createdBy===currentUser.id||!x.createdBy||!!_ti[x.createdBy]})}
+}
+return data}
 function getUserName(id){var u=DB.users.find(function(x){return x.id===id});return u?u.name:'--'}
 function getUserLogin(id){var u=DB.users.find(function(x){return x.id===id});return u?u.username:'--'}
 function getSupplier(id){return DB.suppliers.find(function(s){return s.id===id})}
@@ -886,16 +916,16 @@ function getTourRouteName(id){var t=getTourGroup(id);return t?t.routeName:'--'}
 function getOrderNo(id){var o=DB.orders.find(function(x){return x.id===id});return o?o.orderNo:'--'}
 function getGuide(id){return DB.guides.find(function(g){return g.id===id})}
 function getGuideName(id){var g=getGuide(id);return g?g.name:'--'}
-function guideOptions(selected){var list=DB.guides||[];var html='<option value="">-- 选择导游 --</option>';list.forEach(function(g){html+='<option value="'+g.id+'"'+(g.id===selected?' selected':'')+'>'+esc(g.name)+(g.isSeconded?' (借调)':'')+'</option>'});return html}
-function guideOptionsNone(selected){var list=DB.guides||[];var html='<option value="">无</option>';list.forEach(function(g){html+='<option value="'+g.id+'"'+(g.id===selected?' selected':'')+'>'+esc(g.name)+(g.isSeconded?' (借调)':'')+'</option>'});return html}
+function guideOptions(selected){var list=getVisibleData('guides');var html='<option value="">-- 选择导游 --</option>';list.forEach(function(g){html+='<option value="'+g.id+'"'+(g.id===selected?' selected':'')+'>'+esc(g.name)+(g.isSeconded?' (借调)':'')+'</option>'});return html}
+function guideOptionsNone(selected){var list=getVisibleData('guides');var html='<option value="">无</option>';list.forEach(function(g){html+='<option value="'+g.id+'"'+(g.id===selected?' selected':'')+'>'+esc(g.name)+(g.isSeconded?' (借调)':'')+'</option>'});return html}
 function guideNameOrNone(id){var n=getGuideName(id);return n==='--'?'无':n}
 function statusBadge(s){var m={'待报价':'badge-gray','已报价':'badge-amber','未签约':'badge-gray','已签约':'badge-green','已出团':'badge-green','已完成':'badge-dark-green','已取消':'badge-red','已作废':'badge-red','已退款':'badge-red','招募中':'badge-blue','已成团':'badge-green'};return'<span class="badge '+(m[s]||'badge-gray')+'">'+esc(s)+'</span>'}
 /* 团期状态自动判定：早于发团日00:01→招募中(结束收客则提前显示"出团中"表示停收)；晚于送团日23:59→已完团(优先于"结束收客"，避免已回团仍卡在出团中)；区间内→出团中 */
 function effTourSendOff(tg){if(tg.sendOffTime)return tg.sendOffTime;if(tg.departureDate&&tg.duration){var d=new Date(tg.departureDate+'T00:00:00');d.setDate(d.getDate()+(tg.duration-1));return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}return null}
 function computeTourStatus(tg){var now=new Date();var dep=tg.departureDate?new Date(tg.departureDate+'T00:01:00'):null;var off=effTourSendOff(tg)?new Date(effTourSendOff(tg)+'T23:59:00'):null;if(dep&&now<dep)return tg.recruitClosed?'出团中':'招募中';if(off&&now>off)return'已完团';return'出团中'}
 function tourStatusBadge(tg){var s=computeTourStatus(tg);var m={'招募中':'badge-recruiting','出团中':'badge-ontour','已完团':'badge-completed'};return'<span class="badge '+(m[s]||'badge-gray')+'">'+esc(s)+'</span>'}
-function supplierOptions(type,selected){var types=Array.isArray(type)?type:[type];var list=DB.suppliers.filter(function(s){return types.indexOf(s.type)>=0});var ph=Array.isArray(type)?'交通':type;var html='<option value="">-- 选择'+ph+' --</option>';list.forEach(function(s){var label;if(s.type==='航空交通'){label='['+(s.flightSegment||'')+']'+(s.productName?(' '+s.productName):'')+(s.flightDate?('，'+s.flightDate):'')+'，¥'+s.unitPrice+'/'+getSupplierUnit(s.type)+'，'+s.name}else if(s.type==='铁路交通'){label='['+(s.name||'')+']'+(s.productName?(' '+s.productName):'')+(s.travelDate?('，'+s.travelDate):'')+'，¥'+s.unitPrice+'/'+getSupplierUnit(s.type)+'，'+(s.seatType||'')}else{label=s.name;if(s.productName)label+=' ['+s.productName;if(s.type==='景区'){label+=' 成人¥'+s.unitPrice;if(s.discountPrice!=null)label+=' 优惠¥'+(s.discountPrice||0)}else{label+=' ¥'+s.unitPrice+'/'+getSupplierUnit(s.type)}if(s.productName)label+=']';if(s.type==='汽车交通'&&s.plateNumber)label+=' '+s.plateNumber+(s.driverName?' '+s.driverName:'')}html+='<option value="'+s.id+'"'+(s.id===selected?' selected':'')+'>'+esc(label)+'</option>'});return html}
-function tourGroupOptions(selected){var list=DB.tourGroups.filter(function(t){return (computeTourStatus(t)==='招募中')&&!(t.recruitClosed&&t.id!==selected)});var html='<option value="">-- 选择团期 --</option>';list.forEach(function(t){html+='<option value="'+t.id+'"'+(t.id===selected?' selected':'')+'>'+esc(t.tourNo)+' - '+esc(t.routeName)+' ('+esc(t.departureDate)+')</option>'});return html}
+function supplierOptions(type,selected){var types=Array.isArray(type)?type:[type];var list=getVisibleData('suppliers').filter(function(s){return types.indexOf(s.type)>=0});var ph=Array.isArray(type)?'交通':type;var html='<option value="">-- 选择'+ph+' --</option>';list.forEach(function(s){var label;if(s.type==='航空交通'){label='['+(s.flightSegment||'')+']'+(s.productName?(' '+s.productName):'')+(s.flightDate?('，'+s.flightDate):'')+'，¥'+s.unitPrice+'/'+getSupplierUnit(s.type)+'，'+s.name}else if(s.type==='铁路交通'){label='['+(s.name||'')+']'+(s.productName?(' '+s.productName):'')+(s.travelDate?('，'+s.travelDate):'')+'，¥'+s.unitPrice+'/'+getSupplierUnit(s.type)+'，'+(s.seatType||'')}else{label=s.name;if(s.productName)label+=' ['+s.productName;if(s.type==='景区'){label+=' 成人¥'+s.unitPrice;if(s.discountPrice!=null)label+=' 优惠¥'+(s.discountPrice||0)}else{label+=' ¥'+s.unitPrice+'/'+getSupplierUnit(s.type)}if(s.productName)label+=']';if(s.type==='汽车交通'&&s.plateNumber)label+=' '+s.plateNumber+(s.driverName?' '+s.driverName:'')}html+='<option value="'+s.id+'"'+(s.id===selected?' selected':'')+'>'+esc(label)+'</option>'});return html}
+function tourGroupOptions(selected){var list=getVisibleData('tourGroups').filter(function(t){return (computeTourStatus(t)==='招募中')&&!(t.recruitClosed&&t.id!==selected)});var html='<option value="">-- 选择团期 --</option>';list.forEach(function(t){html+='<option value="'+t.id+'"'+(t.id===selected?' selected':'')+'>'+esc(t.tourNo)+' - '+esc(t.routeName)+' ('+esc(t.departureDate)+')</option>'});return html}
 function openModal(title,body,footer,large){$('modalTitle').textContent=title;$('modalBody').innerHTML=body;$('modalFooter').innerHTML=footer||'';$('modal').className=large?'modal-large':'';$('modal').style.transform='';_modalDragEnd();$('modalOverlay').classList.add('show')}
 function closeModal(){$('modalOverlay').classList.remove('show');$('modal').style.transform='';_modalDragEnd();confirmCb=null}
 /* 全局弹窗拖动：按住标题栏可拖动 #modal。基于 transform 偏移叠加 flex 居中，不动布局结构；
@@ -1053,7 +1083,7 @@ return false}
 function registerStudent(data){
 if(DB.users.some(function(x){return x.username===data.username}))return{error:'用户名已存在'};
 var u={id:genId('u'),username:data.username,password:data.password,role:'student',name:data.name,studentId:data.studentId,createdAt:today()};
-DB.users.push(u);saveData();return{success:true}}
+DB.users.push(u);saveData();return{success:true,user:u,cloud:saveAccountCloudAsync(u)}}
 /* Navigation */
 function showPage(page){
 currentPage=page;
@@ -1213,7 +1243,7 @@ var td=today();var in3=daysFromNow(3);
 var pendingQuote=orders.filter(function(o){return o.status==='未签约'});
 var thisMonth=orders.filter(function(o){return typeof o.createdAt==='string'&&o.createdAt.startsWith(td.slice(0,7))});
 var onTour=orders.filter(function(o){return o.departureDate===td}).reduce(function(s,o){return s+(o.pax||0)},0);
-var totalData=(DB.suppliers?DB.suppliers.length:0)+(DB.guides?DB.guides.length:0)+(DB.tourGroups?DB.tourGroups.length:0)+(DB.orders?DB.orders.length:0)+(DB.financeRecords?DB.financeRecords.length:0);
+var totalData=getVisibleData('suppliers').length+getVisibleData('guides').length+getVisibleData('tourGroups').length+getVisibleData('orders').length+getVisibleData('financeRecords').length;
 var html='';
 html+='<div class="card"><div class="card-title">今日出团列表</div>';
 var depGroups=tourGroups.filter(function(t){return t.departureDate===td});
@@ -1321,7 +1351,7 @@ var _col=_lk.reduce(function(s,o){return s+(parseInt(o.pax)||0)},0);
 var _cap=parseInt(t.maxPax)||0;var _rm=_cap-_col;
 var _rb=t.recruitClosed?'<span class="badge badge-red">收客已结束</span>':(_cap>0&&_rm<=0?'<span class="badge badge-amber">已满位 '+_col+'/'+_cap+'</span>':'<span class="badge badge-green">已收'+_col+'人 · 余'+_rm+'位</span>');
 var _rbtn=t.recruitClosed?'<button class="btn-icon" data-action="reopen-recruit" data-id="'+t.id+'" title="重新开启收客">'+ICONS.unlock+'</button>':'<button class="btn-icon btn-icon-danger" data-action="close-recruit" data-id="'+t.id+'" title="结束收客">'+ICONS.lock+'</button>';
-html+='<tr><td>'+esc(t.tourNo)+'</td><td>'+esc(t.routeName)+'</td><td>'+esc(fmtDateCn(t.departureDate)||'--')+'</td><td>'+esc(fmtDateCn(t.sendOffTime)||'--')+'</td><td>'+esc(t.duration)+'天</td><td>'+fmtMoney(t.price)+'</td><td>'+esc(t.maxPax)+'人</td><td>'+_rb+'</td><td>'+tourStatusBadge(t)+'</td><td>'+esc(getGuideName(t.guideId))+'</td><td>'+_rbtn+'<button class="btn-icon" data-action="view-tour" data-id="'+t.id+'" title="详情">'+ICONS.eye+'</button><button class="btn-icon" data-action="edit-tour" data-id="'+t.id+'" title="编辑">'+ICONS.edit+'</button><button class="btn-icon" data-action="delete-tour" data-id="'+t.id+'" title="删除">'+ICONS.del+'</button></td></tr>'});
+html+='<tr><td>'+esc(t.tourNo)+'</td><td>'+esc(t.routeName)+'</td><td>'+esc(fmtDateCn(t.departureDate)||'--')+'</td><td>'+esc(fmtDateCn(t.sendOffTime)||'--')+'</td><td>'+esc(t.duration)+'天</td><td>'+fmtMoney(t.price)+'</td><td>'+esc(t.maxPax)+'人</td><td>'+_rb+'</td><td>'+tourStatusBadge(t)+'</td><td>'+esc(getGuideName(t.guideId))+'</td><td>'+_rbtn+'<button class="btn-icon" data-action="view-tour" data-id="'+t.id+'" title="详情">'+ICONS.eye+'</button>'+(canEditArchive(t)?'<button class="btn-icon" data-action="edit-tour" data-id="'+t.id+'" title="编辑">'+ICONS.edit+'</button><button class="btn-icon" data-action="delete-tour" data-id="'+t.id+'" title="删除">'+ICONS.del+'</button>':'')+'</td></tr>'});
 html+='</tbody></table></div>';
 html+=buildPager('tour-page',_total,_per,F_tour.page);}
 $('pageContent').innerHTML=html;
@@ -1436,7 +1466,7 @@ var data={tourNo:tourNo,routeName:routeName,departureDate:$('tf_departureDate').
 if(id){Object.assign(t,data);showToast('团期已更新','success')}
 else{data.id=genId('t');data.createdBy=currentUser.id;DB.tourGroups.push(data);showToast('团期已创建','success')}
 var _tgId=id||data.id,_newDep=data.departureDate;(DB.orders||[]).forEach(function(o){if(o.tourGroupId===_tgId)o.departureDate=_newDep});saveData();closeModal();renderTour()}
-function deleteTour(id){showConfirm('确定删除该团期？将一并清除该团期关联的成本付款（付款单、导游备用金）及其台账、凭证、收款；关联订单中线路将显示为「--」',function(){
+function deleteTour(id){var _n=archiveOtherRefs('tourGroups',id);if(_n>0){showToast('该团期已被其他同学的'+_n+'条业务数据引用（订单/收付款/备用金），不能删除','error');return}showConfirm('确定删除该团期？将一并清除该团期关联的成本付款（付款单、导游备用金）及其台账、凭证、收款；关联订单中线路将显示为「--」',function(){
   DB.tourGroups=DB.tourGroups.filter(function(t){return t.id!==id});
   // 清理该团期直接挂接的全部财务记录，避免孤儿数据（与 finSaveTgPay 替换式清理范围一致，并含备用金）
   DB.finPayments=DB.finPayments.filter(function(x){return !(x.tourGroupId===id && x.tgPay)});
@@ -1463,13 +1493,14 @@ var extras=[];var tIds=d.ticketSupplierIds||(d.ticketSupplierId?[d.ticketSupplie
 if(extras.length)html+='<div>'+extras.join('')+'</div>';
 html+='</div>'});
 html+='</div>'}
-var linkedOrders=DB.orders.filter(function(o){return o.tourGroupId===id});
+var linkedOrders=getVisibleData('orders').filter(function(o){return o.tourGroupId===id});
 if(linkedOrders.length>0){html+='<div class="plan-section"><h3>关联订单 ('+linkedOrders.length+')</h3><div class="table-wrap"><table><thead><tr><th>订单号</th><th>客户</th><th>人数</th><th>状态</th></tr></thead><tbody>';
 linkedOrders.forEach(function(o){html+='<tr><td>'+esc(o.orderNo)+'</td><td>'+esc(o.customerName)+'</td><td>'+esc(o.pax)+'</td><td>'+statusBadge(o.status)+'</td></tr>'});
 html+='</tbody></table></div></div>'}
 var _footer='';
-if(t.recruitClosed){_footer+='<button class="btn btn-primary" data-action="generate-plan" data-id="'+t.id+'">'+ICONS.doc+' 生成出团计划书</button><button class="btn btn-secondary" data-action="reopen-recruit" data-id="'+t.id+'" data-src="detail">'+ICONS.unlock+' 重新开启收客</button>'}
-else{_footer+='<button class="btn btn-danger" data-action="close-recruit" data-id="'+t.id+'" data-src="detail">'+ICONS.lock+' 结束收客</button>'}
+var _isT=currentUser&&currentUser.role==='teacher';
+if(t.recruitClosed){_footer+='<button class="btn btn-primary" data-action="generate-plan" data-id="'+t.id+'">'+ICONS.doc+' 生成出团计划书</button>'+(_isT?'<button class="btn btn-secondary" data-action="reopen-recruit" data-id="'+t.id+'" data-src="detail">'+ICONS.unlock+' 重新开启收客</button>':'')}
+else{if(_isT)_footer+='<button class="btn btn-danger" data-action="close-recruit" data-id="'+t.id+'" data-src="detail">'+ICONS.lock+' 结束收客</button>'}
 _footer+='<button class="btn btn-secondary" data-action="close-modal">关闭</button>';
 openModal('团期详情',html,_footer,true)}
 /* Supplier Management */
@@ -1492,7 +1523,7 @@ if(filtered.length===0){html+='<div class="empty">'+ICONS.supplier+'<p>暂无供
 else{html+='<div class="table-wrap"><table><thead><tr><th>类型</th><th>名称</th><th>产品/规格</th><th>单价</th><th>联系人</th><th>联系电话</th><th>车辆/司机</th><th>操作</th></tr></thead><tbody>';
 var _stotal=filtered.length,_sper=F_supplier.perPage,_stp=Math.max(1,Math.ceil(_stotal/_sper));if(F_supplier.page>_stp)F_supplier.page=_stp;var _sst=(F_supplier.page-1)*_sper;var _spg=filtered.slice(_sst,_sst+_sper);
 _spg.forEach(function(x){var vInfo=getVehicleInfo(x);var priceHtml=x.unitPrice?('¥'+esc(x.unitPrice)+'/'+getSupplierUnit(x.type)):'--';if(x.type==='景区'&&x.discountPrice!=null){priceHtml='成人¥'+esc(x.unitPrice)+'/人<br><span style="font-size:12px;color:var(--text-light)">优惠¥'+esc(x.discountPrice||0)+'/人 免票¥'+esc(x.freePrice||0)+'</span>'}var _pcell=esc(x.productName||'--');if(x.type==='航空交通'){var _fd=[];if(x.flightSegment)_fd.push('航段 '+esc(x.flightSegment));if(x.flightDate)_fd.push('日期 '+esc(x.flightDate));if(_fd.length)_pcell+='<br><span style="font-size:12px;color:var(--text-light)">'+_fd.join(' · ')+'</span>'}
-if(x.type==='铁路交通'){var _rd=[];if(x.travelDate)_rd.push('日期 '+esc(x.travelDate));if(x.seatType)_rd.push(esc(x.seatType));if(_rd.length)_pcell+='<br><span style="font-size:12px;color:var(--text-light)">'+_rd.join(' · ')+'</span>'}html+='<tr><td><span class="badge badge-blue">'+esc(x.type)+'</span></td><td>'+esc(x.name)+'</td><td>'+_pcell+'</td><td style="font-weight:600;color:var(--primary)">'+priceHtml+'</td><td>'+esc(x.contact)+'</td><td>'+esc(x.phone)+'</td><td style="font-size:12px">'+(vInfo?esc(vInfo):'--')+'</td><td><button class="btn-icon" data-action="edit-supplier" data-id="'+x.id+'" title="编辑">'+ICONS.edit+'</button><button class="btn-icon" data-action="delete-supplier" data-id="'+x.id+'" title="删除">'+ICONS.del+'</button></td></tr>'});
+if(x.type==='铁路交通'){var _rd=[];if(x.travelDate)_rd.push('日期 '+esc(x.travelDate));if(x.seatType)_rd.push(esc(x.seatType));if(_rd.length)_pcell+='<br><span style="font-size:12px;color:var(--text-light)">'+_rd.join(' · ')+'</span>'}html+='<tr><td><span class="badge badge-blue">'+esc(x.type)+'</span></td><td>'+esc(x.name)+'</td><td>'+_pcell+'</td><td style="font-weight:600;color:var(--primary)">'+priceHtml+'</td><td>'+esc(x.contact)+'</td><td>'+esc(x.phone)+'</td><td style="font-size:12px">'+(vInfo?esc(vInfo):'--')+'</td><td>'+(canEditArchive(x)?'<button class="btn-icon" data-action="edit-supplier" data-id="'+x.id+'" title="编辑">'+ICONS.edit+'</button><button class="btn-icon" data-action="delete-supplier" data-id="'+x.id+'" title="删除">'+ICONS.del+'</button>':'')+'</td></tr>'});
 html+='</tbody></table></div>';
 html+=buildPager('supplier-page',_stotal,_sper,F_supplier.page);}
 $('pageContent').innerHTML=html;
@@ -1516,7 +1547,7 @@ function saveSupplier(id){var name=$('sf_name').value.trim();if(!name){showToast
 var data={type:$('sf_type').value,name:name,contact:$('sf_contact').value.trim(),phone:$('sf_phone').value.trim(),address:$('sf_address').value.trim(),remark:$('sf_remark').value.trim(),productName:$('sf_productName').value.trim(),unitPrice:parseFloat($('sf_unitPrice').value)||0,plateNumber:$('sf_plateNumber')?$('sf_plateNumber').value.trim():'',driverName:$('sf_driverName')?$('sf_driverName').value.trim():'',driverPhone:$('sf_driverPhone')?$('sf_driverPhone').value.trim():'',discountPrice:$('sf_discountPrice')?parseFloat($('sf_discountPrice').value)||0:0,freePrice:$('sf_freePrice')?parseFloat($('sf_freePrice').value)||0:0,flightSegment:$('sf_flightSegment')?$('sf_flightSegment').value.trim():'',flightDate:$('sf_flightDate')?$('sf_flightDate').value.trim():'',travelDate:$('sf_travelDate')?$('sf_travelDate').value.trim():'',seatType:$('sf_seatType')?$('sf_seatType').value.trim():''};
 if(id){var s=getSupplier(id);Object.assign(s,data);showToast('供应商已更新','success')}else{data.id=genId('s');data.createdBy=currentUser.id;DB.suppliers.push(data);showToast('供应商已创建','success')}
 saveData();closeModal();renderSupplier()}
-function deleteSupplier(id){showConfirm('确定删除该供应商？',function(){DB.suppliers=DB.suppliers.filter(function(s){return s.id!==id});saveData();renderSupplier();showToast('已删除','success')})}
+function deleteSupplier(id){var _n=archiveOtherRefs('suppliers',id);if(_n>0){showToast('该供应商已被其他同学的'+_n+'处团期行程/交通/保险引用，不能删除','error');return}showConfirm('确定删除该供应商？',function(){DB.suppliers=DB.suppliers.filter(function(s){return s.id!==id});saveData();renderSupplier();showToast('已删除','success')})}
 /* Guide Management */
 var F_guide={type:'',search:'',page:1,perPage:10};
 function renderGuide(){
@@ -1535,7 +1566,7 @@ if(s)filtered=filtered.filter(function(g){return(g.name.toLowerCase().indexOf(s.
 if(filtered.length===0){html+='<div class="empty">'+ICONS.guide+'<p>暂无导游数据，点击「新建导游」创建</p></div>'}
 else{html+='<div class="table-wrap"><table><thead><tr><th>姓名</th><th>身份证号</th><th>联系电话</th><th>导游证号</th><th>所属公司</th><th>导服费</th><th>借调状态</th><th>操作</th></tr></thead><tbody>';
 var _gtotal=filtered.length,_gper=F_guide.perPage,_gtp=Math.max(1,Math.ceil(_gtotal/_gper));if(F_guide.page>_gtp)F_guide.page=_gtp;var _gst=(F_guide.page-1)*_gper;var _gpg=filtered.slice(_gst,_gst+_gper);
-_gpg.forEach(function(g){html+='<tr><td>'+esc(g.name)+'</td><td>'+esc(g.idCard)+'</td><td>'+esc(g.phone)+'</td><td>'+esc(g.licenseNo)+'</td><td>'+esc(g.company)+'</td><td>'+(g.dailyFee?'¥'+esc(g.dailyFee)+'/天':'--')+'</td><td>'+(g.isSeconded?'<span class="badge badge-amber">借调</span>':'<span class="badge badge-green">本社</span>')+'</td><td><button class="btn-icon" data-action="edit-guide" data-id="'+g.id+'" title="编辑">'+ICONS.edit+'</button><button class="btn-icon" data-action="delete-guide" data-id="'+g.id+'" title="删除">'+ICONS.del+'</button></td></tr>'});
+_gpg.forEach(function(g){html+='<tr><td>'+esc(g.name)+'</td><td>'+esc(g.idCard)+'</td><td>'+esc(g.phone)+'</td><td>'+esc(g.licenseNo)+'</td><td>'+esc(g.company)+'</td><td>'+(g.dailyFee?'¥'+esc(g.dailyFee)+'/天':'--')+'</td><td>'+(g.isSeconded?'<span class="badge badge-amber">借调</span>':'<span class="badge badge-green">本社</span>')+'</td><td>'+(canEditArchive(g)?'<button class="btn-icon" data-action="edit-guide" data-id="'+g.id+'" title="编辑">'+ICONS.edit+'</button><button class="btn-icon" data-action="delete-guide" data-id="'+g.id+'" title="删除">'+ICONS.del+'</button>':'')+'</td></tr>'});
 html+='</tbody></table></div>';
 html+=buildPager('guide-page',_gtotal,_gper,F_guide.page);}
 $('pageContent').innerHTML=html;
@@ -1553,7 +1584,7 @@ var idCard=$('gf_idCard').value.trim();if(idCard&&idCard.length!==18){showToast(
 var data={name:name,idCard:idCard,phone:$('gf_phone').value.trim(),licenseNo:$('gf_licenseNo').value.trim(),company:$('gf_company').value.trim(),isSeconded:$('gf_isSeconded').value==='true',dailyFee:parseFloat($('gf_dailyFee').value)||0};
 if(id){var g=getGuide(id);Object.assign(g,data);showToast('导游信息已更新','success')}else{data.id=genId('g');data.createdBy=currentUser.id;DB.guides.push(data);showToast('导游已创建','success')}
 saveData();closeModal();renderGuide()}
-function deleteGuide(id){showConfirm('确定删除该导游？',function(){DB.guides=DB.guides.filter(function(g){return g.id!==id});saveData();renderGuide();showToast('已删除','success')})}
+function deleteGuide(id){var _n=archiveOtherRefs('guides',id);if(_n>0){showToast('该导游已被其他同学的'+_n+'个团期引用（全陪/地陪/领队），不能删除','error');return}showConfirm('确定删除该导游？',function(){DB.guides=DB.guides.filter(function(g){return g.id!==id});saveData();renderGuide();showToast('已删除','success')})}
 /* Order Management */
 var F_order={dateStart:'',dateEnd:'',search:'',page:1,perPage:10};
 var ORDER_EXPANDED={};
@@ -2452,7 +2483,7 @@ function finOrderAllocCost(o){
 function finTaxDiffByOrder(){
   var orders=finGetOrders();
   var tgCost={};
-  (DB.tourGroups||[]).forEach(function(tg){tgCost[tg.id]={cost:0,pax:0}});
+  getVisibleData('tourGroups').forEach(function(tg){tgCost[tg.id]={cost:0,pax:0}});
   getVisibleData('finPayments').forEach(function(p){if(p.status==='已付'&&p.tourGroupId&&tgCost[p.tourGroupId])tgCost[p.tourGroupId].cost+=p.amount});
   orders.forEach(function(o){if(o.tourGroupId&&tgCost[o.tourGroupId])tgCost[o.tourGroupId].pax+=(parseInt(o.pax)||0)});
   var diff=0;
@@ -2531,7 +2562,7 @@ return''}
    综合服务费为团款中的利润（佣金），仅在团期支付登记作业务登记/凭证，不额外计入收入或成本，避免与团款重复。*/
 function finTourGroupAgg(){
   var tgMap={};
-  (DB.tourGroups||[]).forEach(function(tg){tgMap[tg.id]={tg:tg,inc:0,cost:0,refund:0,orders:0}});
+  getVisibleData('tourGroups').forEach(function(tg){tgMap[tg.id]={tg:tg,inc:0,cost:0,refund:0,orders:0}});
   var noneOrders=[];
   finGetOrders().forEach(function(o){
     /* 净额法：已取消订单不计入团期收入/退款/订单数（收款已退、服务未发生），其团期成本仍照实计入 */
@@ -2564,7 +2595,7 @@ function cashOut(){var s=0;getVisibleData('finPayments').forEach(function(p){if(
    流出 = 该团期「已付」付款之和。未分配团期的订单收款/付款归入 __none__。 */
 function finCashAgg(){
   var m={};
-  (DB.tourGroups||[]).forEach(function(tg){m[tg.id]={tg:tg,in:0,out:0}});
+  getVisibleData('tourGroups').forEach(function(tg){m[tg.id]={tg:tg,in:0,out:0}});
   var orders=finGetOrders();
   getVisibleData('finReceipts').forEach(function(r){
     if(r.status!=='已收'||r.src==='tgpay')return;
@@ -2635,7 +2666,7 @@ return html;
 
 /* ===== 表单 ===== */
 function optOrders(sel){var invoiced={};getVisibleData('finInvoices').forEach(function(i){if(i.status!=='已作废')invoiced[i.orderId]=1});return finGetOrders().filter(function(o){return !invoiced[o.id]}).map(function(o){var _tg=o.tourGroupId?getTourGroup(o.tourGroupId):null;return'<option value="'+o.id+'"'+(sel===o.id?' selected':'')+'>'+esc(getOrderNo(o.id))+' - '+esc(o.customerName)+(_tg?(' - '+esc(_tg.tourNo)):'')+'</option>'}).join('')}
-function optTourGroups(sel){return (DB.tourGroups||[]).map(function(t){return'<option value="'+t.id+'"'+(t.id===sel?' selected':'')+'>'+esc(t.tourNo||t.id)+' - '+esc(t.routeName)+' ('+esc(t.departureDate)+')</option>'}).join('')||'<option value="">无团期</option>'}
+function optTourGroups(sel){return getVisibleData('tourGroups').map(function(t){return'<option value="'+t.id+'"'+(t.id===sel?' selected':'')+'>'+esc(t.tourNo||t.id)+' - '+esc(t.routeName)+' ('+esc(t.departureDate)+')</option>'}).join('')||'<option value="">无团期</option>'}
 function showFinReceiptForm(id){var o=id?DB.orders.find(function(x){return x.id===id}):null;if(o&&o.status==='已取消'){showToast('订单已取消，不能进行收款','error');return}var html='';
 html+='<div class="form-row"><div class="form-group"><label>订单号</label><input type="text" id="ffr_order_view" readonly value="'+esc(getOrderNo(id))+' - '+esc(o?o.customerName:'')+'" style="background:#f9fafb"><input type="hidden" id="ffr_order" value="'+(id||'')+'"></div><div class="form-group"><label>收款类型</label><select id="ffr_kind" data-no-searchbox><option value="定金">定金</option><option value="尾款">尾款</option><option value="分期">分期</option><option value="补差">补差</option><option value="全款">全款</option></select></div></div>';
 html+='<div class="form-row"><div class="form-group"><label>金额(元)</label><input type="number" id="ffr_amount" min="0" step="0.01" value="0"></div><div class="form-group"><label>收款日期</label><input type="hidden" id="ffr_date" value="'+today()+'"><input type="text" readonly id="ffr_date_view" class="date-picker" data-target="ffr_date" value="'+fmtDateCn(today())+'" placeholder="请选择收款日期"></div></div>';
@@ -2955,7 +2986,7 @@ $('pageContent').innerHTML=html}
 function resetPassword(id){
 var _ru=DB.users.find(function(x){return x.id===id});
 if(_ru&&(_ru.role==='teacher'||_ru.id==='u1'||_ru.username==='admin')){showToast('教师主账号为系统内置账号，禁止修改密码','error');return}
-showConfirm('确定将该学生密码重置为 123456？',function(){var u=DB.users.find(function(x){return x.id===id});u.password='123456';saveData();showToast('密码已重置为 123456','success')})}
+showConfirm('确定将该学生密码重置为 123456？',function(){var u=DB.users.find(function(x){return x.id===id});if(!u){showToast('账号不存在','error');return}u.password='123456';saveData();try{saveAccountCloudAsync(u).then(function(){showToast('密码已重置为 123456（已同步云端）','success')}).catch(function(e){showToast('密码已重置，但同步云端失败，请检查网络后重试','error')})}catch(e){showToast('密码已重置，但同步云端失败：'+e.message,'error')}})}
 function deleteAccount(id){
 var _u=DB.users.find(function(x){return x.id===id});
 if(_u&&(_u.role==='teacher'||_u.id==='u1'||_u.username==='admin')){showToast('教师主账号为系统内置账号，不可删除','error');return}
@@ -3418,15 +3449,47 @@ downloadFile(csv,'财务记录_'+today()+'.csv','text/csv');showToast('CSV已导
 /* Mobile sidebar */
 function toggleSidebar(){$('sidebar').classList.toggle('show');$('sidebarOverlay').classList.toggle('show')}
 function closeSidebar(){$('sidebar').classList.remove('show');$('sidebarOverlay').classList.remove('show')}
+/* ===== 共享档案写权限 =====
+   业务档案（供应商/导游/团期）：作者本人可修改、删除；教师可改全部。
+   财务基础档案（会计科目/税率/审批模板/银行账户/期初余额）与截单：仍仅教师。 */
+function _archiveBizKind(action){var m={'edit-supplier':'suppliers','delete-supplier':'suppliers','save-supplier':'suppliers','edit-guide':'guides','delete-guide':'guides','save-guide':'guides','edit-tour':'tourGroups','delete-tour':'tourGroups','save-tour':'tourGroups'};return m[action]||null}
+function canEditArchive(rec){if(!currentUser)return false;if(currentUser.role==='teacher')return true;if(!rec)return false;return rec.createdBy===currentUser.id}
+/* 共享档案被他人业务数据引用计数（本人自建数据不计，允许自行删除） */
+function archiveOtherRefs(kind,id){
+  var me=currentUser?currentUser.id:null,n=0;
+  function other(x){return x&&x.createdBy!==me}
+  if(kind==='tourGroups'){
+    (DB.orders||[]).forEach(function(o){if(o.tourGroupId===id&&other(o))n++});
+    ['finPayments','finReceipts','finAdvances'].forEach(function(f){(DB[f]||[]).forEach(function(r){if(r.tourGroupId===id&&other(r))n++})});
+  }else if(kind==='guides'){
+    (DB.tourGroups||[]).forEach(function(t){if(other(t)&&(t.guideId===id||t.leaderId===id||t.fullGuideId===id))n++});
+  }else if(kind==='suppliers'){
+    (DB.tourGroups||[]).forEach(function(t){
+      if(!other(t))return;
+      if(t.insuranceSupplierId===id)n++;
+      (t.transportSupplierIds||[]).forEach(function(s){if(s&&s===id)n++});
+      (t.itinerary||[]).forEach(function(d){Object.keys(d||{}).forEach(function(k){if(k.indexOf('SupplierId')>=0&&d[k]===id)n++})});
+    });
+  }
+  return n;
+}
 /* Event handling */
 function handleAction(action,el){
 var id=el.dataset.id;var orderId=el.dataset.orderId;
-/* 共享档案：学生可新增（new-动作），但不可修改/删除（edit-/delete- 及带 id 的 save- 动作）、不可改期初余额/恢复预设 */
-var _ARCHIVE_EDIT={'edit-tour':1,'delete-tour':1,'close-recruit':1,'reopen-recruit':1,'edit-supplier':1,'delete-supplier':1,'edit-guide':1,'delete-guide':1,'fin-edit-account':1,'fin-del-account':1,'fin-edit-taxrate':1,'fin-del-taxrate':1,'fin-del-expensecat':1,'fin-edit-approval':1,'fin-del-approval':1,'fin-edit-bank':1,'fin-del-bank':1,'fin-save-opening':1,'fin-restore-presets':1};
-var _ARCHIVE_SAVE={'save-tour':1,'save-supplier':1,'save-guide':1,'fin-save-account':1,'fin-save-taxrate':1,'fin-save-approval':1,'fin-save-bank':1};
+/* 共享档案：业务档案（供应商/导游/团期）作者本人可改删；其余（截单、财务基础档案、期初余额）仅教师 */
+var _ARCHIVE_EDIT={'close-recruit':1,'reopen-recruit':1,'fin-edit-account':1,'fin-del-account':1,'fin-edit-taxrate':1,'fin-del-taxrate':1,'fin-del-expensecat':1,'fin-edit-approval':1,'fin-del-approval':1,'fin-edit-bank':1,'fin-del-bank':1,'fin-save-opening':1,'fin-restore-presets':1};
+var _ARCHIVE_SAVE={'fin-save-account':1,'fin-save-taxrate':1,'fin-save-approval':1,'fin-save-bank':1};
 if(currentUser&&currentUser.role!=='teacher'){
-  if(_ARCHIVE_EDIT[action]){showToast('仅教师可修改或删除共享档案','error');return}
-  if(_ARCHIVE_SAVE[action]&&id){showToast('仅教师可修改共享档案','error');return}
+  var _biz=_archiveBizKind(action);
+  if(_biz){
+    /* save- 且无 id 属新建，放行；其余需为本人创建 */
+    if(!(action.indexOf('save-')===0&&!id)){
+      var _rec=_biz==='suppliers'?getSupplier(id):(_biz==='guides'?getGuide(id):getTourGroup(id));
+      if(!canEditArchive(_rec)){showToast('仅可修改或删除自己创建的共享档案','error');return}
+    }
+  }
+  else if(_ARCHIVE_EDIT[action]){showToast('仅教师可修改或删除共享档案','error');return}
+  else if(_ARCHIVE_SAVE[action]&&id){showToast('仅教师可修改共享档案','error');return}
 }
 switch(action){
 case'nav':showPage(el.dataset.page);break;
@@ -3589,7 +3652,26 @@ case'fin-save-bank':finSaveBank(id);break;
 case'fin-save-opening':DB.finOpening={cash:Math.round((parseFloat($('opCash').value)||0)*100)/100,fixedAssets:Math.round((parseFloat($('opFixed').value)||0)*100)/100,paidInCapital:Math.round((parseFloat($('opCapital').value)||0)*100)/100};saveData();renderFinance();showToast('已保存期初余额（库存现金 '+fmtMoney(DB.finOpening.cash)+' / 固定资产 '+fmtMoney(DB.finOpening.fixedAssets)+' / 实收资本 '+fmtMoney(DB.finOpening.paidInCapital)+'）','success');break;
 default:break}}
 function showMainApp(){$('loginScreen').style.display='none';$('mainApp').style.display='flex';if(SB)subscribeRealtime();try{syncAllPayables();saveData()}catch(e){console.warn('syncPayables',e)}renderSidebar();showPage('dashboard');setInterval(liveRefreshBoard,3000)}
-function enterApp(){loadData().then(function(d){if(d)DB=d;showMainApp()}).catch(function(){showMainApp()})}
+function enterApp(){
+  /* 保存登录时刻的账号快照：若云端仍为旧数据（例如刚改完密码但尚未同步完成），
+     loadData() 拉回旧账号会把新密码冲掉，这里用快照纠正并回写云端，保证换设备可用 */
+  var _snap=null;
+  try{if(currentUser&&DB&&DB.users){var _f=DB.users.find(function(x){return x.id===currentUser.id});if(_f)_snap=Object.assign({},_f)}}catch(e){}
+  loadData().then(function(d){
+    if(d)DB=d;
+    try{
+      if(_snap&&_snap.id&&DB&&Array.isArray(DB.users)){
+        var idx=-1;DB.users.forEach(function(x,i){if(x&&x.id===_snap.id)idx=i});
+        if(idx>=0){
+          if(DB.users[idx].password!==_snap.password||DB.users[idx].username!==_snap.username){
+            DB.users[idx]=_snap;saveAccountCloudAsync(_snap).catch(function(){});
+          }
+        } else { DB.users.push(_snap);saveAccountCloudAsync(_snap).catch(function(){}) }
+      }
+    }catch(e){console.warn('账号快照回填失败',e)}
+    showMainApp()
+  }).catch(function(){showMainApp()})
+}
 async function initApp(){
 DB=await loadData();if(!DB){DB=getDefaultData();saveData()}else{try{if(currentUser)syncAllPayables();saveData()}catch(e){console.warn('syncPayables',e)}}
   if(!DB.guides){DB.guides=[];saveData()}
@@ -3609,14 +3691,19 @@ DB=await loadData();if(!DB){DB=getDefaultData();saveData()}else{try{if(currentUs
 var session=getSession();if(session){currentUser=session;enterApp()}
 if(SB)updateSyncStatus()
 $('loginBtn').onclick=function(){$('loginError').style.display='none';if(login($('loginName').value,$('loginPassword').value)){enterApp()}else{$('loginError').style.display='block'}};
-$('registerBtn').onclick=function(){var u=$('regUsername').value.trim();var p=$('regPassword').value;var p2=$('regPassword2').value;var n=$('regName').value.trim();var sid=$('regStudentId').value.trim();
+$('registerBtn').onclick=async function(){var u=$('regUsername').value.trim();var p=$('regPassword').value;var p2=$('regPassword2').value;var n=$('regName').value.trim();var sid=$('regStudentId').value.trim();
 if(!u||!p||!n){showToast('请填写完整信息','error');return}if(p!==p2){showToast('两次密码不一致','error');return}
-var r=registerStudent({username:u,password:p,name:n,studentId:sid});if(r.error){showToast(r.error,'error')}else{showToast('注册成功，请登录','success');$('showLogin').click();$('loginName').value=u}};
+var r=registerStudent({username:u,password:p,name:n,studentId:sid});if(r.error){showToast(r.error,'error');return}
+var _rb=this;var _rtxt=_rb?_rb.textContent:'';if(_rb){_rb.disabled=true;_rb.textContent='同步中...'}
+try{await r.cloud;showToast('注册成功，请登录','success')}
+catch(e){showToast('注册已保存到本机，但同步云端失败，换其他设备可能登不上，请检查网络后重试','error')}
+if(_rb){_rb.disabled=false;_rb.textContent=_rtxt}
+$('showLogin').click();$('loginName').value=u};
 $('showRegister').onclick=function(){$('loginForm').style.display='none';$('registerForm').style.display='block';$('loginError').style.display='none'};
 $('showLogin').onclick=function(){$('loginForm').style.display='block';$('registerForm').style.display='none'};
 $('showForgot').onclick=function(){$('loginForm').style.display='none';$('forgotForm').style.display='block';$('loginError').style.display='none';$('fpError').style.display='none'};
 $('showLoginFp').onclick=function(){$('forgotForm').style.display='none';$('loginForm').style.display='block';$('fpError').style.display='none'};
-$('forgotBtn').onclick=function(){
+$('forgotBtn').onclick=async function(){
 var u=$('fpUsername').value.trim();var v=$('fpVerify').value.trim();var p=$('fpPassword').value;var p2=$('fpPassword2').value;var fpErr=$('fpError');fpErr.style.display='none';
 if(!u||!v||!p){fpErr.textContent='请填写完整信息';fpErr.style.display='block';return}
 if(p.length<6){fpErr.textContent='密码至少 6 位';fpErr.style.display='block';return}
@@ -3627,7 +3714,10 @@ if(user.role==='teacher'){fpErr.textContent='教师账号不支持自助找回�
 var ok=(user.studentId&&user.studentId===v)||(user.name&&user.name===v);
 if(!ok){fpErr.textContent='学号或姓名验证失败';fpErr.style.display='block';return}
 user.password=p;saveData();
-showToast('密码已重置，请用新密码登录','success');
+var _fb=this;var _ftxt=_fb?_fb.textContent:'';if(_fb){_fb.disabled=true;_fb.textContent='同步中...'}
+try{await saveAccountCloudAsync(user);showToast('密码已重置并同步到云端，请用新密码登录','success')}
+catch(e){if(_fb){_fb.disabled=false;_fb.textContent=_ftxt}fpErr.textContent='新密码已在本机生效，但同步到云端失败，换其他设备仍无法登录，请检查网络后重试';fpErr.style.display='block';return}
+if(_fb){_fb.disabled=false;_fb.textContent=_ftxt}
 $('forgotForm').style.display='none';$('loginForm').style.display='block';
 $('loginName').value=u;$('fpUsername').value='';$('fpVerify').value='';$('fpPassword').value='';$('fpPassword2').value=''};
 $('modalClose').onclick=closeModal;$('modalOverlay').onclick=function(e){if(e.target===$('modalOverlay'))closeModal()};
