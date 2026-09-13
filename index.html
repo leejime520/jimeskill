@@ -198,11 +198,13 @@ tr:hover{background:#f9fafb}
 .badge-red{background:var(--danger-bg);color:var(--danger)}
 .badge-dark-green{background:#dcfce7;color:#15803d}
 /* 团期状态（自动判定：渐变实底+白字+状态点，更大气） */
-.badge-recruiting,.badge-ontour,.badge-completed{display:inline-flex;align-items:center;gap:6px;padding:4px 13px;border-radius:999px;font-size:12px;font-weight:600;line-height:1;letter-spacing:.5px;white-space:nowrap}
-.badge-recruiting::before,.badge-ontour::before,.badge-completed::before{content:'';width:7px;height:7px;border-radius:50%;background:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.25)}
+.badge-recruiting,.badge-ontour,.badge-completed,.badge-closed{display:inline-flex;align-items:center;gap:6px;padding:4px 13px;border-radius:999px;font-size:12px;font-weight:600;line-height:1;letter-spacing:.5px;white-space:nowrap}
+.badge-recruiting::before,.badge-ontour::before,.badge-completed::before,.badge-closed::before{content:'';width:7px;height:7px;border-radius:50%;background:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.25)}
 .badge-recruiting{background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;box-shadow:0 2px 8px rgba(22,163,74,.35);animation:recruitPulse 2.2s ease-in-out infinite}
 .badge-ontour{background:linear-gradient(135deg,#ea580c,#fb923c);color:#fff;box-shadow:0 2px 8px rgba(234,88,12,.35)}
 .badge-completed{background:linear-gradient(135deg,#dc2626,#f05252);color:#fff;box-shadow:0 2px 8px rgba(220,38,38,.35)}
+/* 已截单：未到出发日但已停止收客。与"出团中"区分开——后者才是真的在行程中 */
+.badge-closed{background:linear-gradient(135deg,#64748b,#94a3b8);color:#fff;box-shadow:0 2px 8px rgba(100,116,139,.35)}
 @keyframes recruitPulse{0%,100%{box-shadow:0 2px 8px rgba(22,163,74,.35)}50%{box-shadow:0 2px 15px rgba(34,197,94,.65)}}
 /* Forms */
 .form-row{display:flex;gap:16px;margin-bottom:16px}
@@ -1518,10 +1520,14 @@ function guideOptions(selected){var list=getVisibleData('guides');var html='<opt
 function guideOptionsNone(selected){var list=getVisibleData('guides');var html='<option value="">无</option>';list.forEach(function(g){html+='<option value="'+g.id+'"'+(g.id===selected?' selected':'')+'>'+esc(g.name)+(g.isSeconded?' (借调)':'')+'</option>'});return html}
 function guideNameOrNone(id){var n=getGuideName(id);return n==='--'?'无':n}
 function statusBadge(s){var m={'待报价':'badge-gray','已报价':'badge-amber','未签约':'badge-gray','已签约':'badge-green','已出团':'badge-green','已完成':'badge-dark-green','已取消':'badge-red','已作废':'badge-red','已退款':'badge-red','招募中':'badge-blue','已成团':'badge-green'};return'<span class="badge '+(m[s]||'badge-gray')+'">'+esc(s)+'</span>'}
-/* 团期状态自动判定：早于发团日00:01→招募中(结束收客则提前显示"出团中"表示停收)；晚于送团日23:59→已完团(优先于"结束收客"，避免已回团仍卡在出团中)；区间内→出团中 */
+/* 团期状态自动判定：
+   早于发团日00:01 → 招募中；若已结束收客则显示"已截单"（2026-09-13 起不再借用"出团中"——
+   此前"未出发却显示出团中"造成误解，例如 11/1 的团被显示成出团中）；
+   晚于送团日23:59 → 已完团（优先判定，避免已回团仍卡在出团中）；
+   区间内 → 出团中（此时才是真的在行程中） */
 function effTourSendOff(tg){if(tg.sendOffTime)return tg.sendOffTime;if(tg.departureDate&&tg.duration){var d=new Date(tg.departureDate+'T00:00:00');d.setDate(d.getDate()+(tg.duration-1));return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}return null}
-function computeTourStatus(tg){var now=new Date();var dep=tg.departureDate?new Date(tg.departureDate+'T00:01:00'):null;var off=effTourSendOff(tg)?new Date(effTourSendOff(tg)+'T23:59:00'):null;if(dep&&now<dep)return tg.recruitClosed?'出团中':'招募中';if(off&&now>off)return'已完团';return'出团中'}
-function tourStatusBadge(tg){var s=computeTourStatus(tg);var m={'招募中':'badge-recruiting','出团中':'badge-ontour','已完团':'badge-completed'};return'<span class="badge '+(m[s]||'badge-gray')+'">'+esc(s)+'</span>'}
+function computeTourStatus(tg){var now=new Date();var dep=tg.departureDate?new Date(tg.departureDate+'T00:01:00'):null;var off=effTourSendOff(tg)?new Date(effTourSendOff(tg)+'T23:59:00'):null;if(dep&&now<dep)return tg.recruitClosed?'已截单':'招募中';if(off&&now>off)return'已完团';return'出团中'}
+function tourStatusBadge(tg){var s=computeTourStatus(tg);var m={'招募中':'badge-recruiting','已截单':'badge-closed','出团中':'badge-ontour','已完团':'badge-completed'};return'<span class="badge '+(m[s]||'badge-gray')+'">'+esc(s)+'</span>'}
 function supplierOptions(type,selected){var types=Array.isArray(type)?type:[type];var list=getVisibleData('suppliers').filter(function(s){return types.indexOf(s.type)>=0});var ph=Array.isArray(type)?'交通':type;var html='<option value="">-- 选择'+ph+' --</option>';list.forEach(function(s){var label;if(s.type==='航空交通'){label='['+(s.flightSegment||'')+']'+(s.productName?(' '+s.productName):'')+(s.flightDate?('，'+s.flightDate):'')+'，¥'+s.unitPrice+'/'+getSupplierUnit(s.type)+'，'+s.name}else if(s.type==='铁路交通'){label='['+(s.name||'')+']'+(s.productName?(' '+s.productName):'')+(s.travelDate?('，'+s.travelDate):'')+'，¥'+s.unitPrice+'/'+getSupplierUnit(s.type)+'，'+(s.seatType||'')}else{label=s.name;if(s.productName)label+=' ['+s.productName;if(s.type==='景区'){label+=' 成人¥'+s.unitPrice;if(s.discountPrice!=null)label+=' 优惠¥'+(s.discountPrice||0)}else{label+=' ¥'+s.unitPrice+'/'+getSupplierUnit(s.type)}if(s.productName)label+=']';if(s.type==='汽车交通'&&s.plateNumber)label+=' '+s.plateNumber+(s.driverName?' '+s.driverName:'')}html+='<option value="'+s.id+'"'+(s.id===selected?' selected':'')+'>'+esc(label)+'</option>'});return html}
 function tourGroupOptions(selected){var list=getVisibleData('tourGroups').filter(function(t){return (computeTourStatus(t)==='招募中')&&!(t.recruitClosed&&t.id!==selected)});var html='<option value="">-- 选择团期 --</option>';list.forEach(function(t){html+='<option value="'+t.id+'"'+(t.id===selected?' selected':'')+'>'+esc(t.tourNo)+' - '+esc(t.routeName)+' ('+esc(t.departureDate)+')</option>'});return html}
 function openModal(title,body,footer,large){$('modalTitle').textContent=title;$('modalBody').innerHTML=body;$('modalFooter').innerHTML=footer||'';$('modal').className=large?'modal-large':'';$('modal').style.transform='';_modalDragEnd();$('modalOverlay').classList.add('show')}
@@ -1942,7 +1948,7 @@ if($('tourSearch'))F_tour.search=$('tourSearch').value;
 if(F_tour.status!==prevStatus||F_tour.search!==prevSearch)F_tour.page=1;
 var wasSearch=document.activeElement&&document.activeElement.id==='tourSearch';
 var _arrow=F_tour.sortBy==='departureDate'?(F_tour.sortDir==='asc'?'▲':'▼'):'↕';
-var html='<div class="filter-bar"><select id="tourFilter" data-no-searchbox><option value="">全部状态</option><option value="招募中"'+(F_tour.status==='招募中'?' selected':'')+'>招募中</option><option value="出团中"'+(F_tour.status==='出团中'?' selected':'')+'>出团中</option><option value="已完团"'+(F_tour.status==='已完团'?' selected':'')+'>已完团</option></select><input type="text" id="tourSearch" placeholder="搜索团号/线路名称..."><button class="btn btn-primary btn-sm" data-action="new-tour">'+ICONS.plus+' 新建团期</button></div>';
+var html='<div class="filter-bar"><select id="tourFilter" data-no-searchbox><option value="">全部状态</option><option value="招募中"'+(F_tour.status==='招募中'?' selected':'')+'>招募中</option><option value="出团中"'+(F_tour.status==='出团中'?' selected':'')+'>出团中</option><option value="已完团"'+(F_tour.status==='已完团'?' selected':'')+'>已完团</option><option value="已截单"'+(F_tour.status==='已截单'?' selected':'')+'>已截单</option></select><input type="text" id="tourSearch" placeholder="搜索团号/线路名称..."><button class="btn btn-primary btn-sm" data-action="new-tour">'+ICONS.plus+' 新建团期</button></div>';
 var filtered=tours;
 var f=F_tour.status;var s=F_tour.search;
 if(f)filtered=filtered.filter(function(t){return computeTourStatus(t)===f});
@@ -2069,7 +2075,13 @@ var _trows=Array.from(document.querySelectorAll('#transportEditor .transport-row
 var _tids=[],_tsegs=[];
 _trows.forEach(function(row){var s=row.querySelector('select.transport-sel');var v=s?s.value:'';if(v){_tids.push(v);var seg=row.querySelector('select.transport-segment');_tsegs.push(seg?seg.value:'')}});
 var data={tourNo:tourNo,routeName:routeName,departureDate:$('tf_departureDate').value,duration:parseInt($('tf_duration').value)||1,price:parseFloat($('tf_price').value)||0,maxPax:parseInt($('tf_maxPax').value)||30,insuranceSupplierId:$('tf_insuranceSupplierId').value,recruitClosed:t?t.recruitClosed:false,guideId:$('tf_guideId').value,leaderId:$('tf_leaderId').value,fullGuideId:$('tf_fullGuideId').value,sendOffTime:$('tf_sendOffTime').value,transportSupplierIds:_tids,transportSegments:_tsegs,itinerary:collectItinerary()};
-if(id){Object.assign(t,data);showToast('团期已更新','success')}
+/* A：出发日期被改到将来 → 自动解除"结束收客"。
+   原因：原来的截单是针对旧日期产生的（出发日当天系统自动停收），日期改期后不应继续停收，
+   否则会出现"11月的团卡在停收状态、学生选不到"的情况（2026-09-13 修复）。
+   只在"出发日期确实发生变化"时解除，避免把老师主动对未来团期的截单误解除。 */
+var _reopened=false;
+if(id&&t&&t.recruitClosed&&data.departureDate&&data.departureDate!==t.departureDate&&data.departureDate>today()){data.recruitClosed=false;_reopened=true}
+if(id){Object.assign(t,data);showToast(_reopened?'团期已更新：出发日期改到将来，已自动重新开启收客':'团期已更新','success')}
 else{data.id=genId('t');data.createdBy=currentUser.id;DB.tourGroups.push(data);showToast('团期已创建','success')}
 var _tgId=id||data.id,_newDep=data.departureDate;(DB.orders||[]).forEach(function(o){if(o.tourGroupId===_tgId)o.departureDate=_newDep});saveData();closeModal();renderTour()}
 function deleteTour(id){var _n=archiveOtherRefs('tourGroups',id);if(_n>0){showToast('该团期已被其他同学的'+_n+'条业务数据引用（订单/收付款/备用金），不能删除','error');return}showConfirm('确定删除该团期？将一并清除该团期关联的成本付款（付款单、导游备用金）及其台账、凭证、收款；关联订单中线路将显示为「--」',function(){
