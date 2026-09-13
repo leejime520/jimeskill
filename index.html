@@ -428,8 +428,16 @@ textarea:focus{border-color:var(--primary)}
 #pageContent{padding:16px}
 #topBar{padding:0 16px}
 .topbar-right .btn-text{display:none}
+.topbar-left{gap:10px;min-width:0}
+.topbar-title{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cloud-sync-bar{padding:2px 8px;font-size:11px}
 }
-.cloud-sync-dot{width:8px;height:8px;border-radius:50%;background:var(--success);display:inline-block;margin-right:2px}
+/* 云端同步状态胶囊：位于页面标题右侧，平时显示「云端已同步 时间」，不可达时转红 */
+.cloud-sync-bar{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:12px;background:#f1f5f9;border:1px solid var(--border);font-size:12px;font-weight:500;color:var(--text-light);cursor:pointer;white-space:nowrap;line-height:1.6;user-select:none;transition:background .15s,border-color .15s,color .15s}
+.cloud-sync-bar:hover{background:#e8eef6}
+.cloud-sync-bar.is-off{background:#fef2f2;border-color:#fecaca;color:#b91c1c}
+.cloud-sync-bar.is-off:hover{background:#fee2e2}
+.cloud-sync-dot{width:8px;height:8px;border-radius:50%;background:var(--success);display:inline-block;flex:0 0 auto}
 .cloud-sync-dot.syncing{background:var(--warning);animation:pulse 1s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 /* ===== 自定义日期选择器 ===== */
@@ -632,6 +640,7 @@ textarea:focus{border-color:var(--primary)}
 <h1 data-page-node-id="ZBtKFbtdY1PMsab3Kn5RVu">旅行社经营与管理综合实训平台</h1>
 <p class="subtitle" data-page-node-id="UN5lXTbqGqsSCAiVslwtL4">Travel Agency Operations &amp; Management Training Platform</p>
 <div class="login-error" id="loginError" data-page-node-id="ZNWjSuMEZf5GWGlNxz2wIx">用户名或密码错误</div>
+<div id="cloudOfflineTip" style="display:none;margin:10px 0;padding:10px 12px;border:1px solid #e8b04b;border-radius:8px;background:#fff8ec;color:#8a6d1a;font-size:13px;line-height:1.6"></div>
 <div id="loginForm" data-page-node-id="y5gQzqWIBeSI2t3C17Vu9M">
 <div class="form-group" data-page-node-id="zBJr1jgpEE5YH9DHgfRo4X"><label data-page-node-id="ZvtuRouDPSksTaGzmRvGR9">用户名</label><input type="text" id="loginName" autocomplete="off" data-page-node-id="uOWKC4nhCxsqvwxWogr8z1"></div>
 <div class="form-group" data-page-node-id="eB0DpBw0PKPuvYnYAnac8b"><label data-page-node-id="5dZp6rwhBAvBBTvAJxJXaN">密码</label><input type="password" id="loginPassword" data-page-node-id="kl2mxOwWX9QI6tORr2JZGg"></div>
@@ -701,7 +710,15 @@ function createSB(baseUrl,key){
       var opt={method:st.method==='select'?'GET':(st.method==='delete'?'DELETE':(st.method==='update'?'PATCH':'POST')),headers:Object.assign({},H)};
       if(st.method==='upsert'||st.method==='insert'){opt.headers['Prefer']='resolution=merge-duplicates';opt.body=JSON.stringify(Array.isArray(st.body)?st.body:[st.body])}
       else if(st.method==='update'){opt.body=JSON.stringify(st.body)}
-      return fetch(url,opt).then(function(r){return r.json().then(function(j){var arr=Array.isArray(j)?j:(j?[j]:[]);return {data:st.single?(arr[0]||null):arr,error:r.ok?null:((j&&j.message)||('http_'+r.status))}},function(){return {data:st.single?null:[],error:'parse_error'}})}).catch(function(e){return {data:st.single?null:[],error:e}});
+      return fetch(url,opt).then(function(r){return r.text().then(function(txt){
+        /* ⚠️ 关键：PostgREST 对变更请求默认 return=minimal，成功时返回 201/204 且【响应体为空】。
+           这是正常成功，绝不能当成"非JSON响应"报错——否则每一次写入都被误判为失败，
+           进而产生"3 项待补传""账号信息写入失败""云端不可达"这一整串假故障（数据其实已写入）。 */
+        if(!txt||!txt.trim()){return {data:st.single?null:[],error:r.ok?null:('http_'+r.status)}}
+        var j=null;try{j=JSON.parse(txt)}catch(_e){}
+        if(j===null){return {data:st.single?null:[],error:'非JSON响应(HTTP '+r.status+')：'+txt.replace(/\s+/g,' ').slice(0,120)+'（响应不是 JSON，可能是代理页/认证页/错误页）'}}
+        var arr=Array.isArray(j)?j:(j?[j]:[]);return {data:st.single?(arr[0]||null):arr,error:r.ok?null:((j&&j.message)||('http_'+r.status))}
+      },function(){return {data:st.single?null:[],error:'响应读取失败'}})}).catch(function(e){return {data:st.single?null:[],error:e}});
     }
     var b={
       select:function(c){st.method='select';st.cols=c||'*';return b},
@@ -779,8 +796,36 @@ function today(){return new Date().toISOString().split('T')[0]}
 function daysAgo(n){var d=new Date();d.setDate(d.getDate()-n);return d.toISOString().split('T')[0]}
 function daysFromNow(n){var d=new Date();d.setDate(d.getDate()+n);return d.toISOString().split('T')[0]}
 function showToast(msg,type){type=type||'info';var t=document.createElement('div');t.className='toast toast-'+type;t.textContent=msg;$('toastContainer').appendChild(t);setTimeout(function(){t.classList.add('show')},10);setTimeout(function(){t.classList.remove('show');setTimeout(function(){t.remove()},300)},3000)}
-var SHARED_FIELDS=['suppliers','guides','tourGroups','finAccounts','finTaxRates','finExpenseCats','finApprovalTemplates','finBankAccounts','finOpening'];
+var SHARED_FIELDS=['suppliers','guides','tourGroups','finAccounts','finTaxRates','finExpenseCats','finApprovalTemplates','finBankAccounts','finOpening','bannedUsers'];
+/* ===== 账号封禁名单 =====
+   这些账号已被注销/停用，任何设备均不可再登录。
+   之所以同时写死在代码里：这些账号原本只存在学生本机浏览器（云端无 acct_ 行），
+   若仅靠云端名单，学生离线时仍能凭本机缓存登录；写死后可离线拦截。 */
+var DISABLED_USER_IDS=['umtgo3pu5l9ak','umtgo3rucnhi0','umtgo40ud8bbg','umtgo42cg96yg','umtgo50qd3dkj','umtgo5a2s2lbb','umtgo5bjwjnba','umtgo5bu8ddch','umtgo5l7rcuy1','umtgo5mgvegi6','umtgo5r5ispc4','umtgo5s6v7gkv','umtgo60qn4xx0','umtgo63x4j8cz','umtgo6otjjbgp','umtgo6qntpyau','umtgo6rwlqovl','umtgo6wiuev8n','umtgo723bgwv0','umtgo73c93rus','umtgo7gueitqx','umtgo7qwsd288','umtgo81ao0e7b','umtgo8269fvwf','umtgo83onrkup','umtgo8br1rr4a','umtgo9547mazr','umtgo99hbbx1o','umtgoox2d7w9f','umtgoq1hn2wj1','umtgos6qc2xqd'];
+function isBanned(uid){
+  if(!uid)return false;
+  if(DISABLED_USER_IDS.indexOf(uid)>=0)return true;
+  try{if(DB&&Array.isArray(DB.bannedUsers)&&DB.bannedUsers.indexOf(uid)>=0)return true}catch(e){}
+  return false;
+}
 var PRIVATE_FIELDS=['orders','financeRecords','finReceipts','finPayments','finRefunds','finAdvances','finReimbursements','finGuideReimbursements','finVouchers','finInvoices','finBankFlows','finLogs','finAgencyFees','contracts','agencyBindings'];
+var _cloudSaving=false,_cloudDirty=false,_cloudOffline=false,_lastSyncFailToast=0;
+/* ================= 云端直读模式（2026-09-11 改造） =================
+   CLOUD_ONLY=true  → 纯云端直读：所有展示/调取严格来自 Supabase，
+                      不再回退本机缓存（本机缓存正是"已删订单复活""数据不一致"的根源）。
+                      云端不可达时明确提示，而不是用旧数据渲染。
+   CLOUD_ONLY=false → 回退旧行为（本机缓存兜底）。
+   离线保护：DB 未从云端加载成功时一律拒绝写入，防止"默认空数据"覆盖云端真实数据。 */
+var CLOUD_ONLY=true;
+var _dbFromCloud=false;      // DB 是否成功从云端加载（未成功则禁止写入）
+var _loadedPrivCount=-1;     // 本次加载到的业务数据总条数（用于"异常清空"保护）
+var _loadedSharedCount=-1;   // 本次加载到的共享档案总条数
+var _cloudReadErr=null;      // 最近一次云端读取的错误（null 表示"可达但无数据"）
+var _cloudPulling=false;     // 正在拉取云端，防并发
+var _cloudErrText='';        // 供 UI 展示的错误文案
+var _lastCloudStamp='';      // 轻量变更探测的签名
+var _viewRefreshTimer=null;  // 视图刷新防抖
+var PENDING_KEY='wb_tour_pending';
 var ALL_FIELDS=SHARED_FIELDS.concat(PRIVATE_FIELDS);
 function normalizeDB(d){
   if(!d||typeof d!=='object')return getDefaultData();
@@ -792,10 +837,13 @@ function normalizeDB(d){
 }
 function _sharedPart(d){var o={};SHARED_FIELDS.forEach(function(f){o[f]=d[f]||[]});return o}
 function _privatePart(d){var o={};PRIVATE_FIELDS.forEach(function(f){o[f]=d[f]||[]});return o}
+/* 读取云端单行。返回 null 有两种含义，靠 _cloudReadErr 区分：
+   _cloudReadErr 非空 → 云端不可达（严格失败，不可回退本机）
+   _cloudReadErr 为空 → 云端可达但该行无数据（首次初始化，可用默认数据） */
 async function readCloudRow(rowId){
-  if(!SB)return null;
-  try{var r=await SB.from('app_state').select('data').eq('id',rowId).maybeSingle();if(r.error)throw r.error;if(r.data&&r.data.data)return normalizeDB(r.data.data)}catch(e){console.warn('云端读取失败',rowId,e)}
-  return null;
+  _cloudReadErr=null;
+  if(!SB){_cloudReadErr='云端未初始化';return null}
+  try{var r=await SB.from('app_state').select('data').eq('id',rowId).maybeSingle();if(r.error)throw r.error;if(r.data&&r.data.data)return normalizeDB(r.data.data);return null}catch(e){_cloudReadErr=_errText(e);console.warn('云端读取失败',rowId,e);return null}
 }
 function readLocalRow(key){try{var raw=localStorage.getItem(key);if(raw)return normalizeDB(JSON.parse(raw))}catch(e){}return null}
 function writeLocalRow(key,data){try{localStorage.setItem(key,JSON.stringify(data))}catch(e){}}
@@ -814,6 +862,33 @@ function upsertCloudRowAsync(rowId,data){
     try{updateSyncStatus()}catch(e){}
     return true;
   });
+}
+/* ---------- 写入优化：内容未变不发请求 + 并发限流 + 失败重试 ----------
+   原实现每次 saveData 都一次性并发打出约 195 个 POST（1 shared + ~96 user_ + 98 acct_）。
+   浏览器对单域名并发上限仅约 6 个，其余全部排队 → 超时/429，队尾的 acct_ 账号行最先失败。
+   这就是"我的账号信息写入失败"的根因（Supabase 侧实测写入完全正常）。 */
+function _sigOf(o){try{var s=JSON.stringify(o),h=5381;for(var i=0;i<s.length;i++){h=(((h<<5)+h)+s.charCodeAt(i))>>>0}return s.length+':'+h}catch(e){return ''}}
+var _rowSig={};
+try{_rowSig=JSON.parse(localStorage.getItem(DB_KEY+'_rowsig')||'{}')}catch(e){_rowSig={}}
+function _saveRowSig(){try{localStorage.setItem(DB_KEY+'_rowsig',JSON.stringify(_rowSig))}catch(e){}}
+/* 并发限流执行：limit 路并发，失败自动重试 1 次，返回失败项 [{j:{rowId},e}] */
+function _runCloudJobs(tasks,limit){
+  limit=limit||4;
+  var i=0,out=[];
+  function one(){
+    if(i>=tasks.length)return Promise.resolve();
+    var t=tasks[i++];
+    return upsertCloudRowAsync(t.rowId,t.data).then(function(){
+      _rowSig[t.rowId]=t.sig;_saveRowSig();return null;
+    },function(){
+      return new Promise(function(r){setTimeout(r,800);}).then(function(){
+        return upsertCloudRowAsync(t.rowId,t.data).then(function(){_rowSig[t.rowId]=t.sig;_saveRowSig();return null},function(e2){return {j:t,e:e2}});
+      });
+    }).then(function(x){if(x)out.push(x);return one()});
+  }
+  var ws=[];
+  for(var k=0;k<Math.min(limit,tasks.length);k++)ws.push(one());
+  return Promise.all(ws).then(function(){return out});
 }
 function saveAccountCloudAsync(u){
   if(!u||!u.id)return Promise.resolve(true);
@@ -834,7 +909,7 @@ function migrateLegacyShared(shared){
 }
 function readRawLocal(key){try{var raw=localStorage.getItem(key);if(raw)return JSON.parse(raw)}catch(e){}return null}
 /* 账号独立存储：每个账号一条云端记录（acct_<id>），教师端聚合读取，避免"后注册覆盖先注册"丢号 */
-async function loadAllAccounts(legacyUsers){
+async function loadAllAccounts(legacyUsers,banned){
   var map={};
   function add(u){if(u&&u.id&&!map[u.id])map[u.id]=u;}
   if(SB){
@@ -844,25 +919,52 @@ async function loadAllAccounts(legacyUsers){
     try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k&&k.indexOf(DB_KEY+'_acct_')===0){var o=readRawLocal(k);if(o)add(o)}}}catch(e){console.warn('本地账号读取失败',e)}
   }
   (legacyUsers||[]).forEach(add);
+  /* 封禁清理：剔除停用账号，并删除其云端账号行/业务行与本机残留，确保任何设备都无法再用其登录 */
+  var _ban=(banned||[]).concat(DISABLED_USER_IDS);
+  if(_ban.length){
+    _ban.forEach(function(id){
+      if(!id)return;
+      delete map[id];
+      try{localStorage.removeItem(DB_KEY+'_acct_'+id)}catch(e){}
+      try{localStorage.removeItem(DB_KEY+'_user_'+id)}catch(e){}
+      try{deleteCloudRow('acct_'+id)}catch(e){}
+      try{deleteCloudRow('user_'+id)}catch(e){}
+    });
+  }
   var list=Object.keys(map).map(function(k){return map[k]});
   if(list.length===0)list=getDefaultUsers();
   return list;
 }
+/* 严格云端读取：任一步云端不可达即返回 null，绝不回退本机缓存。
+   返回 null = 业务数据不可信，调用方必须展示"云端不可达"，不得用旧数据渲染。 */
 async function loadData(){
-  var shared=await readCloudRow(SB_ID)||readLocalRow(DB_KEY)||getDefaultData();
+  var shared=await readCloudRow(SB_ID);
+  if(!shared){
+    if(_cloudReadErr)return null;   /* 云端不可达 → 严格失败 */
+    shared=getDefaultData();        /* 云端可达但库为空 → 首次初始化 */
+  }
   migrateLegacyShared(shared);
   var legacyUsers=(shared&&Array.isArray(shared.users))?shared.users:[];
   var d=_sharedPart(shared);
   PRIVATE_FIELDS.forEach(function(f){d[f]=[]});
   var collect=function(dd){PRIVATE_FIELDS.forEach(function(f){(dd[f]||[]).forEach(function(rec){d[f].push(rec)})})};
   if(currentUser&&currentUser.role==='teacher'){
-    if(SB){try{var r=await SB.from('app_state').select('id,data').like('id','user_%');(r.data||[]).forEach(function(x){collect(x.data||{})})}catch(e){console.warn('云端聚合失败',e)}}
-    else{try{for(var i=0;i<localStorage.length;i++){var key=localStorage.key(i);if(key.indexOf(DB_KEY+'_user_')===0){collect(readLocalRow(key)||{})}}}catch(e){console.warn('本地聚合失败',e)}}
+    if(SB){
+      try{
+        var r=await SB.from('app_state').select('id,data').like('id','user_%');
+        if(r.error){_cloudReadErr=_errText(r.error);return null}
+        (r.data||[]).forEach(function(x){collect(x.data||{})});
+      }catch(e){console.warn('云端聚合失败',e);return null}
+    }else{_cloudReadErr='云端未初始化';return null}
   }else if(currentUser){
-    var mine=await readCloudRow('user_'+currentUser.id)||readLocalRow(DB_KEY+'_user_'+currentUser.id)||{};
+    var mine=await readCloudRow('user_'+currentUser.id);
+    if(!mine){ if(_cloudReadErr)return null; mine={} }
     PRIVATE_FIELDS.forEach(function(f){d[f]=(mine[f]||[])});
   }
-  d.users=await loadAllAccounts(legacyUsers);
+  d.users=await loadAllAccounts(legacyUsers,shared.bannedUsers||[]);
+  /* 记录本次加载到的业务数据规模，供 saveData 的"异常清空保护"比对 */
+  _loadedPrivCount=0;PRIVATE_FIELDS.forEach(function(f){_loadedPrivCount+=(d[f]||[]).length});
+  _loadedSharedCount=0;SHARED_FIELDS.forEach(function(f){_loadedSharedCount+=Array.isArray(d[f])?d[f].length:0});
   return d;
 }
 /* 教师账号保护网：确保教师账号永远存在于系统、不可被移除、密码不被篡改 */
@@ -872,19 +974,515 @@ function protectTeacher(){
     DB.users.push({id:'u1',username:'admin',password:'123@456',role:'teacher',name:'教师管理员',studentId:'',createdAt:today(),isSample:true})
   }
 }
-function saveData(){
+/* ---------- 离线待传队列：云端写失败时暂存，联网后自动补传（仅用于补传，绝不用于展示） ---------- */
+function _loadPending(){try{return JSON.parse(localStorage.getItem(PENDING_KEY))||{}}catch(e){return {}}}
+function _savePending(p){try{localStorage.setItem(PENDING_KEY,JSON.stringify(p))}catch(e){}}
+/* 待传队列只记 rowId + 时间，不存数据快照。
+   补传时用「当前 DB 的最新值」重新生成该行，绝不用旧快照——
+   否则断网期间的他人改动会被旧快照覆盖（共享档案是全班共用，后果严重）。 */
+function queuePendingWrite(rowId){var p=_loadPending();p[rowId]=Date.now();_savePending(p)}
+function pendingCount(){return Object.keys(_loadPending()).length}
+function pendingList(){return Object.keys(_loadPending())}
+/* 待传行的中文说明，便于直接看懂"到底是哪几项" */
+function pendingLabel(id){
+  if(id===SB_ID)return '共享档案（供应商/导游/团期/财务基础档案）';
+  if(id.indexOf('user_')===0)return '我的业务数据（订单/收款/付款/合同等）';
+  if(id.indexOf('acct_')===0)return '我的账号信息';
+  return id;
+}
+function clearPendingWrites(){try{localStorage.removeItem(PENDING_KEY)}catch(e){}}
+/* 只对"与当前用户相关的行 + 共享行"排队，避免把全部账号行都堆进队列产生噪音 */
+function _shouldQueue(rowId){
+  if(!rowId)return false;
+  if(rowId===SB_ID)return true;
+  if(currentUser&&rowId==='user_'+currentUser.id)return true;
+  if(currentUser&&rowId==='acct_'+currentUser.id)return true;
+  return false;
+}
+/* 按当前 DB 重新算出某一行该写入的内容 */
+function _rowDataFor(rowId){
+  if(!DB)return null;
+  if(rowId===SB_ID)return _sharedPart(DB);
+  if(rowId.indexOf('user_')===0){
+    var uid=rowId.slice(5),g={};
+    PRIVATE_FIELDS.forEach(function(f){g[f]=(DB[f]||[]).filter(function(r){return (r.createdBy||'anon')===uid})});
+    return g;
+  }
+  if(rowId.indexOf('acct_')===0){
+    var uid2=rowId.slice(5),u=null;
+    (DB.users||[]).forEach(function(x){if(x&&x.id===uid2)u=x});
+    return u?Object.assign({},u,{updated_at:new Date().toISOString()}):null;
+  }
+  return null;
+}
+var _lastFlushErr='';   /* 最近一次补传的失败原因，供状态条悬浮查看（不自动弹窗打扰） */
+function flushPendingWrites(opts){
+  opts=opts||{};
+  var p=_loadPending(),ids=Object.keys(p);
+  if(!ids.length||!SB)return Promise.resolve(0);
+  var errs=[];
+  return Promise.all(ids.map(function(id){
+    var data=_rowDataFor(id);
+    if(!data){delete p[id];_savePending(p);return Promise.resolve(false)}
+    return upsertCloudRowAsync(id,data).then(function(){delete p[id];_savePending(p);return true},function(e){errs.push(pendingLabel(id)+' → '+_errText(e));return false});
+  })).then(function(rs){
+    var ok=rs.filter(Boolean).length;
+    if(ok>0){console.log('[补传] 成功 '+ok+' 项')}
+    if(errs.length){
+      _lastFlushErr=errs.join('；');
+      console.warn('[补传失败] '+errs.join(' | '));
+      /* 自动场景（切页/后台探测）静默，只在用户主动点「同步」时才弹提示，避免反复打扰 */
+      try{_cloudBarMsg('云端未连通 · '+errs.length+' 项待补传',true)}catch(e){}
+    }else{_lastFlushErr=''}
+    return ok;
+  });
+}
+function saveData(opts){
+  opts=opts||{};
+  /* 纯云端模式保护：DB 未从云端加载成功时禁止任何写入。
+     否则离线状态下的"默认空数据"会被写回云端，覆盖掉真实业务数据（不可逆）。 */
+  if(CLOUD_ONLY&&!_dbFromCloud){console.warn('云端数据未加载，已拒绝写入以防覆盖云端');return}
+  /* ⚠️ 异常清空保护：本次会话明明加载到了业务数据，内存里却变成 0，
+     说明 DB 被异常重置（如云端读取中途失败后回退了空结构）。此时写入=用空数据覆盖云端，
+     会造成不可逆的全量丢失（2026-09-11 曾因此丢失全部订单/收付款）。故直接拒绝写入。 */
+  if(_loadedPrivCount>0){
+    var _nowPriv=0;PRIVATE_FIELDS.forEach(function(f){_nowPriv+=(DB[f]||[]).length});
+    if(_nowPriv===0){
+      console.error('[保护] 业务数据由 '+_loadedPrivCount+' 条变为 0，已拒绝写入以防清空云端');
+      try{_cloudBarMsg('已阻止一次异常清空（'+_loadedPrivCount+'条→0）',false)}catch(e){}
+      return;
+    }
+  }
+  if(_loadedSharedCount>0){
+    var _nowShared=0;SHARED_FIELDS.forEach(function(f){_nowShared+=Array.isArray(DB[f])?DB[f].length:0});
+    if(_nowShared===0){
+      console.error('[保护] 共享档案由 '+_loadedSharedCount+' 条变为 0，已拒绝写入以防清空云端');
+      try{_cloudBarMsg('已阻止一次异常清空（共享档案归零）',false)}catch(e){}
+      return;
+    }
+  }
   protectTeacher();
+  var _tasks=[];
+  function _job(rowId,data,localKey){
+    if(localKey)writeLocalRow(localKey,data);
+    var s=_sigOf(data);
+    if(_rowSig[rowId]===s)return;   /* 内容没变 → 不发请求（195 个请求降到个位数的关键） */
+    _tasks.push({rowId:rowId,data:data,sig:s});
+  }
   var shared=_sharedPart(DB);
-  writeLocalRow(DB_KEY,shared);upsertCloudRow(SB_ID,shared);
+  _job(SB_ID,shared);              /* 业务数据不再写本机：纯云端模式本机不参与展示 */
   var groups={};
   PRIVATE_FIELDS.forEach(function(f){(DB[f]||[]).forEach(function(rec){var k='user_'+(rec.createdBy||'anon');if(!groups[k]){groups[k]={};PRIVATE_FIELDS.forEach(function(g){groups[k][g]=[]})}groups[k][f].push(rec)})});
   if(currentUser&&!groups['user_'+currentUser.id]){var eg={};PRIVATE_FIELDS.forEach(function(g){eg[g]=[]});groups['user_'+currentUser.id]=eg;}
-  Object.keys(groups).forEach(function(k){writeLocalRow(DB_KEY+'_'+k,groups[k]);upsertCloudRow(k,groups[k])});
+  Object.keys(groups).forEach(function(k){_job(k,groups[k])});
   /* 账号独立持久化：每条账号写一条 acct_<id> 记录，避免整数组覆盖丢号 */
-  (DB.users||[]).forEach(function(u){var row=Object.assign({},u);row.updated_at=new Date().toISOString();writeLocalRow(DB_KEY+'_acct_'+u.id,row);upsertCloudRow('acct_'+u.id,row)});
+  (DB.users||[]).forEach(function(u){var row=Object.assign({},u);row.updated_at=new Date().toISOString();_job('acct_'+u.id,row,DB_KEY+'_acct_'+u.id)});
+  /* 内容没变化 → 不发请求；云端本就与内存一致，视为已同步 */
+  if(!_tasks.length){_cloudSaving=false;_cloudDirty=false;_lastSyncAt=new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});setCloudState(true);return}
+  _cloudSaving=true;_cloudDirty=true;
+  _runCloudJobs(_tasks).then(function(failed){
+    _cloudSaving=false;
+    if(failed.length){
+      /* 只登记"哪几行没传成功"，数据待补传时用当前 DB 现算，绝不存旧快照 */
+      failed.forEach(function(f){if(_shouldQueue(f.j.rowId))queuePendingWrite(f.j.rowId)});
+      _cloudDirty=true;_cloudOffline=true;_cloudErrText=_errText(failed[0].e);
+      setCloudState(false);
+      var _n=Date.now();
+      /* 失败不打扰用户：自动重连会退避重试补传，无需手动点任何按钮 */
+      if(_n-(_lastSyncFailToast||0)>8000){_lastSyncFailToast=_n;console.warn('[云端写入失败] '+_cloudErrText+'（数据仍在页面上，系统会自动重试补传）')}
+      return;
+    }
+    _cloudDirty=false;_cloudOffline=false;_cloudErrText='';
+    _lastSyncAt=new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
+    setCloudState(true);
+    _scheduleViewRefresh();   /* 写成功后回拉云端，保证"展示=云端最新" */
+  });
 }
-function updateSyncStatus(){var bar=$('cloudSyncBar');if(!bar||!bar.classList.contains('show'))return;var txt=$('syncStatusText');if(txt)txt.textContent='已同步 '+new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});var dot=bar.querySelector('.cloud-sync-dot');if(dot)dot.classList.remove('syncing')}
-function subscribeRealtime(){if(!SB)return;setInterval(function(){if(!document.querySelector('.modal')&&$('mainApp').style.display!=='none'){loadData().then(function(d){if(d){DB=d;showPage(currentPage);updateSyncStatus();refreshOpenDoc()}}).catch(function(){})}},15000)}
+/* 错误文案：只陈述可验证的事实，不臆测"被拦截"。
+   failed to fetch 仅表示浏览器这次请求没成功，原因可能是离线/DNS/TLS/代理/CORS/扩展拦截/超时，
+   不能一律翻译成"被拦截"。真实原因请用 diagnoseCloud() 实测。 */
+function _errText(e){
+  if(!e)return '未知错误';
+  if(typeof e==='string')return e;
+  var m=e.message||String(e);
+  if(/failed to fetch|networkerror|network request failed|load failed|fetch failed/i.test(m)){
+    try{if(navigator&&navigator.onLine===false)return '设备当前离线'}catch(x){}
+    return '网络请求未成功（'+m+'）';
+  }
+  if(/cors|cross-origin|cross origin|blocked by/i.test(m))return '浏览器拒绝跨域请求（CORS）';
+  if(/timeout|timed out|aborted/i.test(m))return '请求超时或被中断';
+  if(e.status)return 'HTTP '+e.status+' '+(m||'');
+  return m||'未知错误';
+}
+/* 云端提示统一走顶栏状态条，不再弹窗打扰（用户明确要求去掉同步弹窗）。
+   真实原因写 console（F12 可见），状态条悬浮可看最近失败原因。 */
+function _cloudBarMsg(txt,off){
+  try{
+    var bar=$('cloudSyncBar');if(!bar)return;
+    var el=$('syncStatusText');if(el)el.textContent=txt;
+    if(off)bar.classList.add('is-off');else bar.classList.remove('is-off');
+  }catch(e){}
+}
+/* 云端连通性实测：真实发一个只读请求，报告 HTTP 状态/耗时/响应类型，不猜测原因 */
+function diagnoseCloud(){
+  var t0=Date.now();
+  var online=true;try{online=!(navigator&&navigator.onLine===false)}catch(x){}
+  console.log('[云诊断] 目标 '+SUPABASE_URL+' / 浏览器在线:'+online);
+  return fetch(SUPABASE_URL+'/rest/v1/app_state?select=id&limit=1',{
+    method:'GET',cache:'no-store',
+    headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Accept':'application/json'}
+  }).then(function(r){
+    var ms=Date.now()-t0;
+    return r.text().then(function(t){
+      var head=(t||'').slice(0,120).replace(/\s+/g,' ');
+      var c=(t||'').trim().charAt(0);
+      var isJson=(c==='['||c==='{');
+      var ok=(r.status>=200&&r.status<300&&isJson);
+      console.log('[云诊断] HTTP '+r.status+'  '+ms+'ms  响应类型:'+(isJson?'JSON(正常)':'非JSON(异常)')+(isJson?'':'  开头:'+head));
+      return {status:r.status,ms:ms,isJson:isJson,ok:ok,head:head,online:online};
+    });
+  }).catch(function(e){
+    var ms=Date.now()-t0,m=(e&&e.message)||String(e);
+    console.log('[云诊断] 请求失败：'+m+'（'+ms+'ms）');
+    return {status:0,ms:ms,ok:false,error:m,online:online};
+  });
+}
+/* ---------- 云端自检面板（URL 加 #diag 打开） ----------
+   在真实浏览器环境里逐步实测每一步请求，结果直接渲染成页面文字，
+   不弹窗、不依赖控制台。用于一次性定位"云端不可达"的真实原因。 */
+function _diagRow(box,name,state,detail){
+  var d=document.createElement('div');
+  d.style.cssText='padding:8px 10px;border-bottom:1px solid #e5e7eb;font-size:13px;line-height:1.6';
+  var color=(state==='ok')?'#16a34a':((state==='fail')?'#dc2626':'#6b7280');
+  d.innerHTML='<div><b style="color:'+color+'">'+state.toUpperCase()+' · '+name+'</b></div>'+
+    (detail?'<div style="color:#374151;word-break:break-all;white-space:pre-wrap;font-family:ui-monospace,Menlo,monospace;font-size:12px;margin-top:2px">'+detail+'</div>':'');
+  box.appendChild(d);
+}
+function runCloudDiag(){
+  var ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;z-index:99999;background:#f9fafb;overflow:auto;padding:20px;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color:#111827';
+  ov.innerHTML='<h2 style="margin:0 0 4px;font-size:18px">云端连接自检</h2>'+
+    '<div style="color:#6b7280;font-size:12px;margin-bottom:12px;line-height:1.7">目标：<b>'+SUPABASE_URL+'</b><br>请等全部步骤跑完，点「复制全部结果」发我，或截图。</div>'+
+    '<div id="diagBox" style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;max-width:920px"></div>'+
+    '<div style="margin-top:12px;display:flex;gap:8px"><button id="diagCopy" style="padding:6px 14px;border:1px solid #d1d5db;background:#fff;border-radius:6px;cursor:pointer">复制全部结果</button><button id="diagClose" style="padding:6px 14px;border:1px solid #d1d5db;background:#fff;border-radius:6px;cursor:pointer">关闭</button></div>';
+  document.body.appendChild(ov);
+  var box=ov.querySelector('#diagBox'),log=[];
+  function rec(n,s,d){log.push('['+s.toUpperCase()+'] '+n+(d?'\n    '+d:''));_diagRow(box,n,s,d)}
+  ov.querySelector('#diagCopy').onclick=function(){try{navigator.clipboard.writeText(log.join('\n'));this.textContent='已复制 ✓'}catch(e){this.textContent='复制失败，请手动选中'}};
+  ov.querySelector('#diagClose').onclick=function(){ov.remove()};
+  var _on=true;try{_on=!(navigator&&navigator.onLine===false)}catch(e){}
+  rec('环境','info','页面地址：'+location.href+'\n页面来源：'+location.origin+'\n浏览器在线：'+_on+'\nUA：'+navigator.userAgent);
+  function timed(name,fn){return function(){var t0=Date.now();return fn().then(function(x){return {ms:Date.now()-t0,v:x}})}}
+  var steps=[
+    timed('T1 裸GET（无自定义头，等同地址栏访问）',function(){
+      return fetch(SUPABASE_URL+'/rest/v1/app_state?select=id&limit=1',{method:'GET',cache:'no-store'}).then(function(r){return r.text().then(function(t){return {st:r.status,txt:t}})},function(e){return {err:e.message||String(e)}});
+    }),
+    timed('T2 带密钥头的GET（等同点状态条的实测）',function(){
+      return fetch(SUPABASE_URL+'/rest/v1/app_state?select=id&limit=1',{method:'GET',cache:'no-store',headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Accept':'application/json'}}).then(function(r){return r.text().then(function(t){return {st:r.status,txt:t}})},function(e){return {err:e.message||String(e)}});
+    }),
+    timed('T3 完全等同平台客户端的GET（多 Content-Type 头，会触发 CORS 预检）',function(){
+      return fetch(SUPABASE_URL+'/rest/v1/app_state?select=id&limit=1',{method:'GET',cache:'no-store',headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Content-Type':'application/json'}}).then(function(r){return r.text().then(function(t){return {st:r.status,txt:t}})},function(e){return {err:e.message||String(e)}});
+    }),
+    timed('T4 读取 shared 共享行',function(){
+      return SB.from('app_state').select('data').eq('id','shared').maybeSingle().then(function(r){return {err:r.error?(_errText(r.error)):null,len:r.data?JSON.stringify(r.data).length:0,has:!!(r.data&&r.data.data)}});
+    }),
+    timed('T5 读取全部 user_ 业务行',function(){
+      return SB.from('app_state').select('id,data').like('id','user_%').then(function(r){return {err:r.error?_errText(r.error):null,n:(r.data||[]).length,len:JSON.stringify(r.data||[]).length}});
+    }),
+    timed('T6 读取全部 acct_ 账号行',function(){
+      return SB.from('app_state').select('id,data').like('id','acct_%').then(function(r){return {err:r.error?_errText(r.error):null,n:(r.data||[]).length,len:JSON.stringify(r.data||[]).length}});
+    }),
+    timed('T7 写入探针行（测写权限，会自动删除）',function(){
+      return upsertCloudRowAsync('__diag__',{t:Date.now()}).then(function(){deleteCloudRow('__diag__');return {ok:true}},function(e){return {err:_errText(e)}});
+    }),
+    timed('T8 完整 loadData()（平台真正的数据加载）',function(){
+      return loadData().then(function(d){return {ok:!!d,err:_cloudReadErr||null,n:d?Object.keys(d).length:0}},function(e){return {err:_errText(e)}});
+    })
+  ];
+  function judgeT(i,v){
+    if(v.v&&v.v.err)return ['fail','请求失败（fetch 抛错）：'+v.v.err];
+    if(i===0){
+      /* T1 故意不带密钥，Supabase 返回 401 No API key 属【预期成功】——说明网络通 */
+      var s0=v.v.st,t0x=(v.v.txt||'').slice(0,160).replace(/\s+/g,' ');
+      var j0=null;try{j0=JSON.parse(v.v.txt||'')}catch(e){}
+      return [(s0===401&&j0)?'ok':'fail','HTTP '+s0+'（无密钥被拒 401 是预期的，说明网络通）\n响应：'+(t0x||'(空)')];
+    }
+    if(i<3){ /* T2-T3 */
+      var st=v.v.st,txt=(v.v.txt||'').slice(0,160).replace(/\s+/g,' ');
+      var c=(v.v.txt||'').trim().charAt(0),isJson=(c==='['||c==='{');
+      return [(st>=200&&st<300&&isJson)?'ok':'fail','HTTP '+st+' · 响应'+(isJson?'是JSON(正常)':'非JSON')+'\n响应开头：'+(txt||'(空)')];
+    }
+    if(i===3)return [(!v.v.err&&v.v.has)?'ok':'fail',v.v.err?('错误：'+v.v.err):('读到共享行，'+v.v.len+' 字节')];
+    if(i===4||i===5)return [(!v.v.err)?'ok':'fail',v.v.err?('错误：'+v.v.err):('读到 '+v.v.n+' 行 / '+v.v.len+' 字节')];
+    if(i===6)return [(v.v.ok)?'ok':'fail',v.v.ok?'写入成功（探针行已删除）':('错误：'+v.v.err)];
+    return [(v.v.ok)?'ok':'fail',v.v.ok?('loadData 返回数据，字段 '+v.v.n+' 个'):('错误：'+(v.v.err||'返回 null'))];
+  }
+  var LABELS=['T1 裸GET（无自定义头，等同地址栏）','T2 带密钥头的GET','T3 等同平台客户端的GET（含 Content-Type，触发 CORS 预检）','T4 读取 shared 共享行','T5 读取全部 user_ 业务行','T6 读取全部 acct_ 账号行','T7 写入探针行（自动删除）','T8 完整 loadData()'];
+  var i=0;
+  function next(){
+    if(i>=steps.length){rec('结论','info','全部 OK → 云端读写正常，状态条应为绿色、待补传归零。\n若 T1 401 而 T2/T3 失败 → 自定义请求头被拦（CORS 预检）。\n若 T1~T3 都失败 → 浏览器到 supabase.co 不通。\n若 T7 仍失败 → 写入被拒，是"待补传"的真实来源。');return}
+    var idx=i,fn=steps[i];i++;
+    fn().then(function(v){
+      var j=judgeT(idx,v);
+      rec(LABELS[idx]||('步骤'+(idx+1)),j[0],j[1]+'\n耗时 '+v.ms+'ms');
+    },function(e){rec(LABELS[idx]||('步骤'+(idx+1)),'fail','异常：'+_errText(e))}).then(next);
+  }
+  next();
+}
+/* ---------- 本地残留恢复（URL 加 #recover） ----------
+   早期版本会把业务数据同时存一份到本机 localStorage。若某台电脑还留着，
+   可用它把数据传回云端；只补"云端该行为空"的情况，绝不覆盖云端已有数据。 */
+function runLocalRecover(){
+  var ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;z-index:99999;background:#f9fafb;overflow:auto;padding:20px;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color:#111827';
+  ov.innerHTML='<h2 style="margin:0 0 4px;font-size:18px">本机残留数据恢复</h2>'+
+    '<div style="color:#6b7280;font-size:12px;margin-bottom:12px;line-height:1.7">扫描本机保存的业务数据，仅当云端对应行为空时才上传，不会覆盖云端现有数据。</div>'+
+    '<div id="rcBox" style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;max-width:920px"></div>';
+  document.body.appendChild(ov);
+  var box=ov.querySelector('#rcBox');
+  var keys=[];
+  try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k&&k.indexOf(DB_KEY+'_user_')===0)keys.push(k)}}catch(e){}
+  if(!keys.length){_diagRow(box,'扫描结果','fail','本机没有找到任何业务数据残留（'+DB_KEY+'_user_*）。');return}
+  _diagRow(box,'扫描结果','ok','找到 '+keys.length+' 个本机数据键，开始比对云端…');
+  var idx=0;
+  function one(){
+    if(idx>=keys.length){_diagRow(box,'完成','ok','处理完毕。请刷新平台查看数据。');return}
+    var k=keys[idx++],rowId=k.slice(DB_KEY.length+1);
+    var raw=null;try{raw=JSON.parse(localStorage.getItem(k))}catch(e){}
+    var n=0;if(raw){PRIVATE_FIELDS.forEach(function(f){n+=(raw[f]||[]).length})}
+    if(!raw||!n){_diagRow(box,rowId,'info','本机为空，跳过');return one()}
+    SB.from('app_state').select('data').eq('id',rowId).maybeSingle().then(function(r){
+      var cn=0;var cd=(r.data&&r.data.data)||{};PRIVATE_FIELDS.forEach(function(f){cn+=(cd[f]||[]).length});
+      if(cn>0){_diagRow(box,rowId,'info','云端已有 '+cn+' 条，跳过（不覆盖）');return null}
+      return upsertCloudRowAsync(rowId,raw).then(function(){
+        _diagRow(box,rowId,'ok','已上传本机 '+n+' 条到云端');
+      },function(e){_diagRow(box,rowId,'fail','上传失败：'+_errText(e))});
+    }).then(one,function(e){_diagRow(box,rowId,'fail','读取云端失败：'+_errText(e));one()});
+  }
+  one();
+}
+if(location.hash==='#diag'){window.addEventListener('DOMContentLoaded',function(){setTimeout(function(){try{runCloudDiag()}catch(e){console.error(e)}},50)})}
+if(location.hash==='#recover'){window.addEventListener('DOMContentLoaded',function(){setTimeout(function(){try{runLocalRecover()}catch(e){console.error(e)}},50)})}
+/* 显示"最后一次真正同步成功"的时刻，而不是每次重绘都刷成当前时间——
+   否则切页会让时间跳动，看起来像刚刚同步过，实际并没有。 */
+var _lastSyncAt='';
+function _syncTimeText(){return '云端已同步 '+(_lastSyncAt||new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}))}
+function updateSyncStatus(){var bar=$('cloudSyncBar');if(!bar)return;var txt=$('syncStatusText');if(txt)txt.textContent=_syncTimeText();var dot=bar.querySelector('.cloud-sync-dot');if(dot)dot.classList.remove('syncing');bar.classList.remove('is-off')}
+/* 顶栏「同步」：先探测云端连通性，可达则触发一次全量保存；不可达给出明确提示 */
+function retryCloudSync(){
+  if(!SB){_cloudBarMsg('云端未初始化',true);return}
+  _cloudBarMsg('同步中...',false);
+  diagnoseCloud().then(function(info){
+    if(info.ok){
+      _cloudOffline=false;_cloudErrText='';setCloudState(true);
+      var pc=pendingCount();
+      flushPendingWrites({silent:true}).then(function(ok){
+        saveData({silent:true});
+        var left=pendingCount();
+        console.log('[云诊断] HTTP '+info.status+' · '+info.ms+'ms；补传 '+ok+' 项，剩余 '+left+' 项 '+(_lastFlushErr||''));
+        if(left>0){_cloudBarMsg('仍剩 '+left+' 项待补传（悬浮看原因）',true)}
+        else{setCloudState(true)}
+      });
+    }else{
+      _cloudOffline=true;_cloudErrText=info.error||('HTTP '+(info.status||0));
+      setCloudState(false);
+    }
+  });
+}
+/* 自动镜像：云端拉取成功后，用云端最新值覆盖本机同名键。
+   本机只是"云端副本"，永远不参与展示（CLOUD_ONLY），因此：
+   每次同步成功都把本机刷成云端一致 → 旧残留自动消失，彻底不需要手动「清缓存」。 */
+var _lastMirror=0;
+function _mirrorLocalFromDB(force){
+  if(!CLOUD_ONLY||!DB)return;
+  var _n=Date.now();
+  if(!force&&_n-_lastMirror<30000)return;   /* 节流：内容没变化时 30 秒最多写一次本机 */
+  _lastMirror=_n;
+  try{
+    writeLocalRow(DB_KEY,_sharedPart(DB));
+    if(currentUser&&currentUser.id){
+      var g=_rowDataFor('user_'+currentUser.id);
+      if(g)writeLocalRow(DB_KEY+'_user_'+currentUser.id,g);
+      var me=null;(DB.users||[]).forEach(function(u){if(u&&u.id===currentUser.id)me=u});
+      if(me)writeLocalRow(DB_KEY+'_acct_'+currentUser.id,Object.assign({},me,{updated_at:new Date().toISOString()}));
+    }
+  }catch(e){}
+}
+/* ================= 云端直读核心（2026-09-11） ================= */
+function _isTyping(){
+  var a=document.activeElement;
+  if(!a)return false;
+  var t=(a.tagName||'').toLowerCase();
+  return t==='input'||t==='textarea'||t==='select'||!!a.isContentEditable;
+}
+/* 云端状态：null=同步中 / true=正常 / false=不可达 */
+function setCloudState(ok){
+  try{
+    var bar=$('cloudSyncBar');
+    if(bar){
+      var txt=$('syncStatusText');
+      var dot=bar.querySelector('.cloud-sync-dot');
+      if(ok===null){bar.classList.remove('is-off');if(txt)txt.textContent='同步中...';if(dot){dot.classList.add('syncing');dot.style.background=''}}
+      else if(ok===true){bar.classList.remove('is-off');if(txt)txt.textContent=_syncTimeText();if(dot){dot.classList.remove('syncing');dot.style.background=''}}
+      else{bar.classList.add('is-off');var _pc=0,_pl=[];try{_pc=pendingCount();_pl=pendingList()}catch(e){}
+        if(txt)txt.textContent='云端不可达 · 点击重试'+(_pc>0?'（'+_pc+' 项待补传）':'');
+        try{bar.title=(_pc>0?('待补传明细：\n· '+_pl.map(pendingLabel).join('\n· ')):'点击立即重试同步到云端')+(_lastFlushErr?('\n\n最近失败原因：\n'+_lastFlushErr):'')}catch(e){}
+        if(dot){dot.classList.remove('syncing');dot.style.background='#dc2626'}}
+    }
+  }catch(e){}
+  if(ok===true){try{updateSyncStatus()}catch(e){}}
+}
+/* 从云端拉取完整 DB 覆盖内存快照。返回 {changed:bool}，失败返回 null */
+async function cloudPull(){
+  if(!SB){_cloudErrText='云端未初始化';setCloudState(false);return null}
+  if(_cloudPulling)return null;
+  /* 统一守卫：本地还有未上云的修改 / 写入在飞 / 有待传队列时，禁止回拉云端。
+     把这条放在 cloudPull 内部，等于给所有调用路径（切页、写后回拉、定时探测、自动重连）
+     都加上同一道保险，杜绝"刚录入的数据被云端旧快照覆盖消失"。 */
+  if(_cloudSaving)return null;             /* 写入正在飞：静默跳过，10 秒后定时探测会再来 */
+  if(_cloudDirty||pendingCount()>0){       /* 确实有没上云的改动：安排自动补传，补完再回拉 */
+    console.warn('[cloudPull] 本地有 '+pendingCount()+' 项未上云，已安排自动补传，补完再回拉');
+    _scheduleReconnect();
+    return null;
+  }
+  _cloudPulling=true;setCloudState(null);
+  try{
+    var d=await loadData();
+    if(!d){_cloudErrText=_cloudReadErr||'云端读取失败';setCloudState(false);return null}
+    var changed=(JSON.stringify(d)!==JSON.stringify(DB));
+    DB=d;_dbFromCloud=true;
+    _mirrorLocalFromDB(changed);   /* 本机镜像=云端最新，旧残留自动消失（无需手动清缓存） */
+    _cloudOffline=false;_cloudErrText='';
+    _lastSyncAt=new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
+    setCloudState(true);
+    flushPendingWrites();   /* 云端可达 → 补传离线期间暂存的数据 */
+    return {changed:changed};
+  }catch(e){_cloudErrText=_errText(e);setCloudState(false);return null}
+  finally{_cloudPulling=false}
+}
+/* 自动重绘限流：10 秒内最多 4 次，防止"渲染触发保存 → 保存触发刷新 → 再渲染"的循环 */
+var _refreshHits=0,_refreshWin=0;
+function _refreshAllowed(){
+  var n=Date.now();
+  if(n-_refreshWin>10000){_refreshWin=n;_refreshHits=0}
+  if(++_refreshHits>4)return false;
+  return true;
+}
+/* 切页后刷新：拉云端 → 有变化且未打断用户 → 重绘 */
+function _cloudRefreshView(page){
+  if(!SB)return;
+  cloudPull().then(function(r){
+    if(!r||!r.changed)return;
+    if(currentPage!==page)return;
+    if(document.querySelector('.modal')||_isTyping())return;
+    if(!_refreshAllowed())return;
+    renderPageOnly(currentPage);
+  }).catch(function(){});
+}
+/* 写操作成功后回拉（防抖 400ms，避免连续操作打爆请求） */
+function _scheduleViewRefresh(){
+  if(_viewRefreshTimer)clearTimeout(_viewRefreshTimer);
+  _viewRefreshTimer=setTimeout(function(){
+    _viewRefreshTimer=null;
+    if(document.querySelector('.modal')||_isTyping())return;
+    cloudPull().then(function(r){
+      if(!r||!r.changed)return;
+      if(document.querySelector('.modal')||_isTyping())return;
+      if(!_refreshAllowed())return;
+      renderPageOnly(currentPage);
+    }).catch(function(){});
+  },400);
+}
+/* 轻量变更探测：只取 id+updated_at（极小 payload），发现真的变了才拉全量。
+   替代原"每 15 秒全量覆盖内存"——既不盲拉大包，也能看到他人改动。 */
+function cloudStampCheck(){
+  if(!SB)return;
+  SB.from('app_state').select('id,updated_at').then(function(r){
+    if(r.error){_cloudOffline=true;_cloudErrText=_errText(r.error);setCloudState(false);return}
+    var rows=r.data||[];
+    var sig=rows.map(function(x){return x.id+':'+(x.updated_at||'')}).sort().join('|');
+    if(sig===_lastCloudStamp)return;
+    var first=(_lastCloudStamp==='');
+    _lastCloudStamp=sig;
+    if(first)return;   /* 首次仅记录基线，不触发重绘 */
+    cloudPull().then(function(res){
+      if(!res||!res.changed)return;
+      if(document.querySelector('.modal')||_isTyping())return;
+      if(!_refreshAllowed())return;
+      renderPageOnly(currentPage);
+    }).catch(function(){});
+  }).catch(function(e){_cloudOffline=true;_cloudErrText=_errText(e);setCloudState(false)});
+}
+/* ===== 全自动同步引擎（2026-09-11）：用户零操作 =====
+   三层触发，保证"录入即上云、他人改动及时可见"：
+   ① 定时轻量探测：10 秒一次（只取 id+updated_at，payload 极小，不拉大包）
+   ② 事件即时触发：写完数据后 400ms 回拉 / 切页时回拉 / 切回前台 / 网络恢复
+   ③ 断线自动重连：4s→8s→16s→30s 封顶退避，恢复后自动补传 + 回拉 + 重绘
+   全程不弹窗；状态条只显示「已同步 / 同步中 / 自动重试中」。 */
+var _autoSyncOn=false,_rcTimer=null,_rcDelay=4000,_rcRound=0;
+function _needReconnect(){return !!SB&&(_cloudOffline||pendingCount()>0)}
+/* 断线/有待传数据时的自动重连：补传 → 回拉 → 有变化才重绘；失败则退避再试 */
+function _scheduleReconnect(){
+  if(_rcTimer||!SB)return;
+  _rcTimer=setTimeout(function(){
+    _rcTimer=null;
+    if(!SB)return;
+    if(_cloudSaving){_scheduleReconnect();return}
+    _rcRound++;
+    setCloudState(null);
+    /* 先补传本地未上云的修改。补传成功前绝不回拉云端——
+       否则云端旧快照会覆盖刚录入的数据（"录入后数据消失"的老毛病）。 */
+    flushPendingWrites({silent:true}).then(function(){
+      if(pendingCount()>0){
+        _rcDelay=Math.min(_rcDelay*2,30000);
+        _cloudOffline=true;setCloudState(false);
+        console.warn('[自动重连] 第 '+_rcRound+' 次补传未成功，'+(_rcDelay/1000)+'s 后再试（已保护本地未上传数据）');
+        _scheduleReconnect();return null;
+      }
+      if(_cloudSaving){_scheduleReconnect();return null}   /* 仍有写入在飞 → 让路 */
+      _cloudDirty=false;                                   /* 修改已上云 → 可安全回拉 */
+      return cloudPull();
+    }).then(function(r){
+      if(r===null||r===undefined)return;
+      if(r){
+        _rcDelay=4000;_rcRound=0;_cloudOffline=false;
+        if(r.changed&&!document.querySelector('.modal')&&!_isTyping()&&_refreshAllowed())renderPageOnly(currentPage);
+      }else{
+        _rcDelay=Math.min(_rcDelay*2,30000);
+        _cloudOffline=true;setCloudState(false);
+        console.warn('[自动重连] 第 '+_rcRound+' 次未成功，'+(_rcDelay/1000)+'s 后再试');
+        _scheduleReconnect();
+      }
+    },function(e){
+      _rcDelay=Math.min(_rcDelay*2,30000);
+      _cloudOffline=true;_cloudErrText=_errText(e);setCloudState(false);
+      _scheduleReconnect();
+    });
+  },_rcDelay);
+}
+function _cloudTick(){
+  if(!SB||document.hidden||_cloudSaving)return;
+  if(_needReconnect()){_scheduleReconnect();return}
+  if(_cloudPulling||_cloudDirty)return;
+  var ma=$('mainApp');if(!ma||ma.style.display==='none')return;
+  if(document.querySelector('.modal')||_isTyping())return;
+  cloudStampCheck();
+}
+function _kickSync(){   /* 立即同步一次（切回前台/网络恢复时用），不弹窗 */
+  if(!SB||document.hidden)return;
+  if(_needReconnect()){_scheduleReconnect();return}
+  if(_cloudPulling||_cloudSaving||_cloudDirty)return;
+  cloudStampCheck();
+}
+function subscribeRealtime(){
+  if(!SB||_autoSyncOn)return;
+  _autoSyncOn=true;
+  setInterval(_cloudTick,10000);   /* ① 定时轻量探测 */
+  /* ② 事件即时触发 */
+  document.addEventListener('visibilitychange',function(){if(!document.hidden)setTimeout(_kickSync,300)});
+  window.addEventListener('online',function(){_rcDelay=4000;setTimeout(_kickSync,300)});
+  setTimeout(_kickSync,1200);      /* 进入后立即探测一次，状态条尽快显示真实状态 */
+}
 function getSession(){try{return JSON.parse(sessionStorage.getItem(SESSION_KEY))}catch(e){return null}}
 function setSession(u){sessionStorage.setItem(SESSION_KEY,JSON.stringify({id:u.id,username:u.username,role:u.role,name:u.name}))}
 function clearSession(){sessionStorage.removeItem(SESSION_KEY)}
@@ -1072,12 +1670,13 @@ var finBankFlows=[];
 var finLogs=[];
 var finAgencyFees=[];
 var contracts=[];var agencyBindings=[];
-return{users:users,suppliers:suppliers,guides:guides,tourGroups:tourGroups,orders:orders,financeRecords:financeRecords,finAccounts:finAccounts,finTaxRates:finTaxRates,finExpenseCats:finExpenseCats,finApprovalTemplates:finApprovalTemplates,finBankAccounts:finBankAccounts,finOpening:finOpening,finReceipts:finReceipts,finPayments:finPayments,finRefunds:finRefunds,finAdvances:finAdvances,finReimbursements:finReimbursements,finGuideReimbursements:finGuideReimbursements,finVouchers:finVouchers,finInvoices:finInvoices,finBankFlows:finBankFlows,finLogs:finLogs,finAgencyFees:finAgencyFees,contracts:contracts,agencyBindings:agencyBindings}
+return{users:users,suppliers:suppliers,guides:guides,tourGroups:tourGroups,orders:orders,financeRecords:financeRecords,finAccounts:finAccounts,finTaxRates:finTaxRates,finExpenseCats:finExpenseCats,finApprovalTemplates:finApprovalTemplates,finBankAccounts:finBankAccounts,finOpening:finOpening,finReceipts:finReceipts,finPayments:finPayments,finRefunds:finRefunds,finAdvances:finAdvances,finReimbursements:finReimbursements,finGuideReimbursements:finGuideReimbursements,finVouchers:finVouchers,finInvoices:finInvoices,finBankFlows:finBankFlows,finLogs:finLogs,finAgencyFees:finAgencyFees,contracts:contracts,agencyBindings:agencyBindings,bannedUsers:[]}
 }
 /* Auth */
 function login(username,password){
 username=(username||'').trim();password=(password||'');if(!username)return false;
 var u=DB.users.find(function(x){return x.username===username});
+if(u&&isBanned(u.id)){try{showToast('该账号已被停用，无法登录','error')}catch(e){}return false}
 if(u&&u.password===password){currentUser={id:u.id,username:u.username,role:u.role,name:u.name};setSession(currentUser);return true}
 return false}
 function registerStudent(data){
@@ -1085,14 +1684,18 @@ if(DB.users.some(function(x){return x.username===data.username}))return{error:'�
 var u={id:genId('u'),username:data.username,password:data.password,role:'student',name:data.name,studentId:data.studentId,createdAt:today()};
 DB.users.push(u);saveData();return{success:true,user:u,cloud:saveAccountCloudAsync(u)}}
 /* Navigation */
-function showPage(page){
+function renderPageOnly(page){
 currentPage=page;
 document.querySelectorAll('.nav-item').forEach(function(n){n.classList.remove('active')});
 var navEl=document.querySelector('[data-page="'+page+'"]');if(navEl)navEl.classList.add('active');
 var p=PAGES[page];if(p)$('topBar').innerHTML=renderTopBar(p.title);
 var renderFn={dashboard:renderDashboard,tour:renderTour,supplier:renderSupplier,guide:renderGuide,order:renderOrder,contract:renderContract,finance:renderFinance,account:renderAccount}[page];
 if(renderFn)renderFn();
-closeSidebar()}
+closeSidebar();
+try{setCloudState(_cloudOffline?false:(_dbFromCloud?true:null))}catch(e){}}
+/* 云端直读：先用当前快照出画面，随即拉取云端最新数据，有变化则重绘。
+   这样每个页面看到的数据都来自云端，而不是本机缓存。 */
+function showPage(page){renderPageOnly(page);_cloudRefreshView(page)}
 function renderSidebar(){
 var html='<div class="sidebar-logo">旅行社经营与管理综合实训平台</div>';
 html+='<div class="sidebar-user"><div class="name">'+esc(currentUser.name)+'</div><div class="role"><span class="role-badge '+(currentUser.role==='teacher'?'badge-teacher':'badge-student')+'">'+(currentUser.role==='teacher'?'教师管理员':'学生计调员')+'</span></div></div>';
@@ -1106,7 +1709,10 @@ html+='<div class="sidebar-footer">川文传职院旅游管理教研室技术开
 $('sidebar').innerHTML=html;
 }
 function renderTopBar(title){
-var html='<div class="topbar-left"><div class="topbar-title">'+title+'</div></div>';
+/* 同步状态条放在页面标题右侧：切页即重建，随后由 renderPageOnly 末尾的 setCloudState 立即回填真实状态 */
+var html='<div class="topbar-left"><div class="topbar-title">'+title+'</div>';
+html+='<span id="cloudSyncBar" class="cloud-sync-bar show" data-action="retry-sync" title="云端同步状态（全自动，无需手动操作）；点击可立即重试一次"><span class="cloud-sync-dot"></span><span id="syncStatusText">云端检测中…</span></span>';
+html+='</div>';
 html+='<div class="topbar-right">';
 html+='<button class="btn btn-sm btn-secondary" data-action="export-json" title="导出JSON备份">'+ICONS.export+'<span class="btn-text">导出</span></button>';
 html+='<button class="btn btn-sm btn-secondary" data-action="import-json" title="导入恢复">'+ICONS.import+'<span class="btn-text">导入</span></button>';
@@ -1803,7 +2409,16 @@ function finReceiptsOf(o){return getVisibleData('finReceipts').filter(function(r
 function finPaymentsOf(o){return getVisibleData('finPayments').filter(function(p){return p.tourGroupId===o.tourGroupId})}
 function finRefundsOf(o){return getVisibleData('finRefunds').filter(function(r){return r.orderId===o.id})}
 function finAdvancesOf(o){return getVisibleData('finAdvances').filter(function(a){return a.tourGroupId===o.tourGroupId})}
-function finIncome(o){return finReceiptsOf(o).reduce(function(s,r){return s+r.amount},0)}
+/* 仅「已收」状态的收款单计入收入；无 status 的历史/导入数据按已收处理，避免误丢 */
+function _finIsReceived(r){return !r.status||r.status==='已收'}
+function finIncome(o){return finReceiptsOf(o).filter(_finIsReceived).reduce(function(s,r){return s+(r.amount||0)},0)}
+/* 净实收 = 已收 − 已退：退款不构成真实收入，保证「已收 − 成本 = 毛利」闭合 */
+function finNetIncome(o){return Math.round((finIncome(o)-finRefundAmt(o))*100)/100}
+/* 财务口径有效订单：已取消订单服务未发生、款项已退，不计入应收/已收
+   （其团期成本仍照实计入 finTourGroupAgg，与该聚合口径保持一致） */
+function finEffectiveOrders(){return finGetOrders().filter(function(o){return o.status!=='已取消'})}
+/* 单笔未收 = 应收 − 净实收，下限 0：避免未分配团期（应收计 0）或超额退款时出现负数 */
+function finUnreceived(o){if(o.status==='已取消')return 0;return Math.max(0,Math.round((finOrderReceivable(o)-finNetIncome(o))*100)/100)}
 function finCostPaid(o){return finPaymentsOf(o).filter(function(p){return p.status==='已付'}).reduce(function(s,p){return s+p.amount},0)}
 function finAdvBorrowed(o){return finAdvancesOf(o).filter(function(a){return a.status==='已借'}).reduce(function(s,a){return s+a.amount},0)}
 function finRefundAmt(o){return finRefundsOf(o).filter(function(r){return r.status==='已退'}).reduce(function(s,r){return s+r.amount},0)}
@@ -1928,7 +2543,7 @@ var F_logs={page:1,perPage:10};
 var F_pay={search:'',page:1,perPage:10};
 var F_gr={search:'',page:1,perPage:10};
 /* 已取消订单按「取消规则」定稿财务状态：有退团退款→已退款；未收款→已取消。不再按"应收-已收"口径得出已结清/未收款，保证与订单取消状态一致 */
-function finLedgerStatus(o){if(o.status==='已取消'){return finRefundAmt(o)>0?'已退款':'已取消'}var rec=finOrderReceivable(o),inc=finIncome(o);
+function finLedgerStatus(o){if(o.status==='已取消'){return finRefundAmt(o)>0?'已退款':'已取消'}var rec=finOrderReceivable(o),inc=finNetIncome(o);
 if(rec<=0)return'无需收款';
 if(inc>=rec)return'已结清';
 if(inc>0)return'部分收款';
@@ -1939,10 +2554,11 @@ var lPrev=F_ledger.search;
 if($('ledgerSearch'))F_ledger.search=$('ledgerSearch').value;
 if(F_ledger.search!==lPrev)F_ledger.page=1;
 var tRec=0,tInc=0,tCost=0,tGross=0,loss=0;
-orders.forEach(function(o){tRec+=finOrderReceivable(o);tInc+=finIncome(o)});
+/* 与「毛利」同口径：应收/已收只统计有效订单（剔除已取消），已收取净额（扣已退退款） */
+finEffectiveOrders().forEach(function(o){tRec+=finOrderReceivable(o);tInc+=finNetIncome(o)});
 /* 已付成本 / 毛利 按「团期」聚合（与单团盈亏表一致）：避免按订单逐笔 finOrderCost 时，同一团期支付被各订单重复累加 */
 var _agg=finTourGroupAgg();Object.keys(_agg).forEach(function(k){var m=_agg[k];tCost+=m.cost;tGross+=(m.inc-m.cost-m.refund);if((m.inc-m.cost-m.refund)<0)loss++});
-var tUnrec=tRec-tInc;
+var tUnrec=0;finEffectiveOrders().forEach(function(o){tUnrec+=finUnreceived(o)});
 var html='<div class="stats-grid stats-grid-5">';
 html+='<div class="stat-card"><div class="stat-icon" style="background:var(--primary)">'+ICONS.order+'</div><div class="stat-info"><div class="value" style="color:var(--primary)">'+fmtMoney(tRec)+'</div><div class="label">订单应收总额</div></div></div>';
 html+='<div class="stat-card"><div class="stat-icon" style="background:var(--success)">'+ICONS.finance+'</div><div class="stat-info"><div class="value" style="color:var(--success)">'+fmtMoney(tInc)+'</div><div class="label">已收金额</div></div></div>';
@@ -1957,7 +2573,7 @@ var rows=orders;
 if(s)rows=rows.filter(function(o){var tg=getTourGroup(o.tourGroupId);return (getOrderNo(o.id).toLowerCase().indexOf(s)>=0)||(o.customerName.toLowerCase().indexOf(s)>=0)||(tg&&tg.routeName&&tg.routeName.toLowerCase().indexOf(s)>=0)});
 html+='<div class="table-wrap"><table><thead><tr><th>订单编号</th><th>客户姓名</th><th>线路名称</th><th>人数</th><th>应收</th><th>已收</th><th>未收</th><th>状态</th><th>操作</th></tr></thead><tbody>';
 var _ltotal=rows.length,_lper=F_ledger.perPage,_ltp=Math.max(1,Math.ceil(_ltotal/_lper));if(F_ledger.page>_ltp)F_ledger.page=_ltp;var _lst=(F_ledger.page-1)*_lper;var _lpg=rows.slice(_lst,_lst+_lper);
-_lpg.forEach(function(o){var tg=getTourGroup(o.tourGroupId);var rec=finOrderReceivable(o),inc=finIncome(o),unrec=rec-inc;
+_lpg.forEach(function(o){var tg=getTourGroup(o.tourGroupId);var rec=finOrderReceivable(o),inc=finNetIncome(o),unrec=finUnreceived(o);
 var csLabel=finLedgerStatus(o),csBadge,csColor;
 if(csLabel==='已退款'){csBadge=finBadge('已退款','badge-red');csColor='var(--danger)'}
 else if(csLabel==='已取消'){csBadge=finBadge('已取消','badge-red');csColor='var(--text-light)'}
@@ -1979,8 +2595,8 @@ function showFinLedger(id){var o=DB.orders.find(function(x){return x.id===id});i
 var html='<div class="fin-single"><div class="fin-single-head">单团独立核算 · '+esc(getOrderNo(id))+' · '+esc(o.customerName)+' · '+esc(tg?tg.routeName:'')+'</div>';
 html+='<div class="fin-single-grid">';
 html+='<div class="fin-box"><div class="fin-box-t">应收总额</div>'+finMoney(finOrderReceivable(o))+'</div>';
-html+='<div class="fin-box"><div class="fin-box-t">已收（收款单）</div>'+finMoney(finIncome(o),'var(--success)')+'</div>';
-html+='<div class="fin-box"><div class="fin-box-t">未收</div>'+finMoney(finOrderReceivable(o)-finIncome(o),'var(--danger)')+'</div>';
+html+='<div class="fin-box"><div class="fin-box-t">已收（收款单·净）</div>'+finMoney(finNetIncome(o),'var(--success)')+'</div>';
+html+='<div class="fin-box"><div class="fin-box-t">未收</div>'+finMoney(finUnreceived(o),'var(--danger)')+'</div>';
 html+='<div class="fin-box"><div class="fin-box-t">已付成本</div>'+finMoney(finOrderCost(o),'var(--danger)')+'</div>';
 html+='<div class="fin-box"><div class="fin-box-t">退款冲减</div>'+finMoney(finRefundAmt(o),'var(--danger)')+'</div>';
 html+='<div class="fin-box '+(g<0?'fin-box-loss':'')+'"><div class="fin-box-t">实时毛利</div>'+finMoney(g,g<0?'var(--danger)':'var(--success)')+'</div>';
@@ -2002,7 +2618,7 @@ openModal('单团核算',html,'<button class="btn btn-secondary" data-action="cl
 
 /* 订单编号点击：仅显示该订单收支明细（收款明细 = 收款单；支付明细 = 该订单退款；供应商付款/导游备用金属团期级，不在此单列） */
 function showFinLedgerDetail(id){var o=DB.orders.find(function(x){return x.id===id});if(!o)return;var tg=getTourGroup(o.tourGroupId);
-var dRec=finOrderReceivable(o),dInc=finIncome(o),dUnrec=dRec-dInc;
+var dRec=finOrderReceivable(o),dInc=finNetIncome(o),dUnrec=finUnreceived(o);
 var html='<div class="fin-single"><div class="fin-single-head">收支明细 · '+esc(getOrderNo(id))+' · '+esc(o.customerName)+' · '+esc(tg?tg.routeName:'')+'</div>';
 html+='<div class="fin-single-grid">';
 html+='<div class="fin-box"><div class="fin-box-t">应收</div>'+finMoney(dRec)+'</div>';
@@ -2586,7 +3202,7 @@ function finTourGroupAgg(){
   });
   return tgMap;
 }
-function ar2(){var s=0;finGetOrders().forEach(function(o){s+=finOrderReceivable(o)-finIncome(o)});return s>0?s:0}
+function ar2(){var s=0;finEffectiveOrders().forEach(function(o){s+=finUnreceived(o)});return s}
 function pay2(){var s=0;getVisibleData('finPayments').forEach(function(p){if(p.status!=='已付')s+=p.amount});return s}
 function cashIn(){var s=0;getVisibleData('finReceipts').forEach(function(r){if(r.status==='已收'&&r.src!=='tgpay')s+=r.amount});return s}
 function cashOut(){var s=0;getVisibleData('finPayments').forEach(function(p){if(p.status==='已付')s+=p.amount});return s}
@@ -2854,7 +3470,8 @@ function showFinRptTg(kind,tgId){
   var isNone=tgId==='__none__';
   var tg=isNone?{id:'__none__',tourNo:'未分配',routeName:'未分配团期',departureDate:''}:getTourGroup(tgId);
   if(!tg)return;
-  var orders=finGetOrders().filter(function(o){return isNone?!o.tourGroupId:o.tourGroupId===tgId});
+  /* 与 finTourGroupAgg/看板毛利同口径：剔除已取消订单（其成本仍照实计入，见下方 cost） */
+  var orders=finGetOrders().filter(function(o){return o.status!=='已取消'&&(isNone?!o.tourGroupId:o.tourGroupId===tgId)});
   var head='<div class="fin-single"><div class="fin-single-head">'+esc(tg.tourNo||tg.id)+' · '+esc(tg.routeName||'')+(tg.departureDate?' · '+esc(tg.departureDate):'')+'</div>';
   if(kind==='profit'){
     var inc=0,cost=0,refund=0;
@@ -3084,8 +3701,8 @@ var id=tcOrderId;
 if(!DB.orders.find(function(x){return x.id===id})){closePrint();showToast('该订单已被删除，单据已关闭','error');return}
 generateTeamConfirm(id)}
 async function refreshDocData(){
-if(SB){try{var d=await loadData();if(d){DB=d;updateSyncStatus()}}catch(e){showToast('同步失败：'+e.message,'error')}}
-refreshOpenDoc();showToast('已同步最新数据','success')}
+if(SB){try{var d=await loadData();if(d){DB=d;updateSyncStatus()}}catch(e){console.warn('[同步失败] '+e.message);_cloudBarMsg('同步失败 · 点击重试',true)}}
+refreshOpenDoc();console.log('[手动刷新] 已拉取云端最新数据')}
 /* 金额数字 -> 人民币大写 */
 function rmbUpper(amount){
 var num=Number(amount);if(isNaN(num))return '';
@@ -3496,6 +4113,7 @@ case'nav':showPage(el.dataset.page);break;
 case'logout':clearSession();location.reload();break;
 case'export-json':exportJSON();break;
 case'import-json':importJSON();break;
+case'retry-sync':retryCloudSync();break;
 case'export-csv':exportCSV();break;
 case'close-modal':closeModal();break;
 case'print-ledger-detail':printFinLedgerDetail();break;
@@ -3651,7 +4269,7 @@ case'fin-del-bank':finDelBank(id);break;
 case'fin-save-bank':finSaveBank(id);break;
 case'fin-save-opening':DB.finOpening={cash:Math.round((parseFloat($('opCash').value)||0)*100)/100,fixedAssets:Math.round((parseFloat($('opFixed').value)||0)*100)/100,paidInCapital:Math.round((parseFloat($('opCapital').value)||0)*100)/100};saveData();renderFinance();showToast('已保存期初余额（库存现金 '+fmtMoney(DB.finOpening.cash)+' / 固定资产 '+fmtMoney(DB.finOpening.fixedAssets)+' / 实收资本 '+fmtMoney(DB.finOpening.paidInCapital)+'）','success');break;
 default:break}}
-function showMainApp(){$('loginScreen').style.display='none';$('mainApp').style.display='flex';if(SB)subscribeRealtime();try{syncAllPayables();saveData()}catch(e){console.warn('syncPayables',e)}renderSidebar();showPage('dashboard');setInterval(liveRefreshBoard,3000)}
+function showMainApp(){$('loginScreen').style.display='none';$('mainApp').style.display='flex';if(SB)subscribeRealtime();try{syncAllPayables();saveData({silent:true})}catch(e){console.warn('syncPayables',e)}renderSidebar();showPage('dashboard');setInterval(liveRefreshBoard,3000)}
 function enterApp(){
   /* 保存登录时刻的账号快照：若云端仍为旧数据（例如刚改完密码但尚未同步完成），
      loadData() 拉回旧账号会把新密码冲掉，这里用快照纠正并回写云端，保证换设备可用 */
@@ -3659,6 +4277,19 @@ function enterApp(){
   try{if(currentUser&&DB&&DB.users){var _f=DB.users.find(function(x){return x.id===currentUser.id});if(_f)_snap=Object.assign({},_f)}}catch(e){}
   loadData().then(function(d){
     if(d)DB=d;
+    /* 封禁拦截：当前登录账号若在停用名单中，强制退出并回到登录页 */
+    try{
+      if(currentUser&&isBanned(currentUser.id)){
+        clearSession();currentUser=null;
+        try{showToast('该账号已被停用','error')}catch(e){}
+        var _lf=document.getElementById('loginForm');if(_lf)_lf.style.display='block';
+        var _rf=document.getElementById('registerForm');if(_rf)_rf.style.display='none';
+        var _ff=document.getElementById('forgotForm');if(_ff)_ff.style.display='none';
+        var _ma=document.getElementById('mainApp');if(_ma)_ma.style.display='none';
+        var _le=document.getElementById('loginError');if(_le)_le.style.display='none';
+        return;
+      }
+    }catch(e){}
     try{
       if(_snap&&_snap.id&&DB&&Array.isArray(DB.users)){
         var idx=-1;DB.users.forEach(function(x,i){if(x&&x.id===_snap.id)idx=i});
@@ -3670,27 +4301,42 @@ function enterApp(){
       }
     }catch(e){console.warn('账号快照回填失败',e)}
     showMainApp()
-  }).catch(function(){showMainApp()})
+  }).catch(function(){_cloudOffline=true;showMainApp()})
 }
 async function initApp(){
-DB=await loadData();if(!DB){DB=getDefaultData();saveData()}else{try{if(currentUser)syncAllPayables();saveData()}catch(e){console.warn('syncPayables',e)}}
-  if(!DB.guides){DB.guides=[];saveData()}
-  if(!DB.finAgencyFees){DB.finAgencyFees=[];saveData()}
-  if(!DB.finGuideReimbursements){DB.finGuideReimbursements=[];saveData()}
-  if(!DB.finAccounts){DB.finAccounts=[];saveData()}
-  if(!DB.finTaxRates){DB.finTaxRates=[];saveData()}
-  if(!DB.finExpenseCats){DB.finExpenseCats=[];saveData()}
+/* 一次性清理旧格式待传队列：旧版存的是"数据快照"，补传会覆盖云端更新的数据，必须丢弃 */
+try{var _rp=localStorage.getItem(PENDING_KEY);if(_rp){var _ro=JSON.parse(_rp)||{};if(Object.keys(_ro).some(function(k){return _ro[k]&&typeof _ro[k]==='object'})){localStorage.removeItem(PENDING_KEY);console.warn('已清理旧格式待传队列（含过时数据快照）')}}}catch(e){}
+DB=await loadData();
+_dbFromCloud=!!DB;
+if(!DB){
+  /* 云端不可达（纯云端直读模式）：只能给默认结构 + 本机账号（保证还能登录），
+     业务数据一律不允许用本机旧数据冒充，也禁止任何写入以防覆盖云端。 */
+  DB=getDefaultData();
+  try{DB.users=await loadAllAccounts([],[])}catch(e){DB.users=DB.users||[]}
+  _cloudOffline=true;_cloudErrText=_cloudReadErr||'云端读取失败';
+}
+/* 云端连通性探测：决定登录页是否提示"离线"，避免把网络问题误显示成致命报错 */
+try{if(SB){var _cp=await SB.from('app_state').select('id').eq('id',SB_ID).maybeSingle();if(_cp.error){_cloudOffline=true;_cloudErrText=_errText(_cp.error)}}else{_cloudOffline=true}}catch(e){_cloudOffline=true}
+/* 只有确认数据来自云端才允许回写，否则离线空数据会覆盖云端真实数据 */
+if(_dbFromCloud){try{if(currentUser)syncAllPayables();saveData({silent:true})}catch(e){console.warn('syncPayables',e)}}
+  if(!DB.guides){DB.guides=[];saveData({silent:true})}
+  if(!DB.finAgencyFees){DB.finAgencyFees=[];saveData({silent:true})}
+  if(!DB.finGuideReimbursements){DB.finGuideReimbursements=[];saveData({silent:true})}
+  if(!DB.finAccounts){DB.finAccounts=[];saveData({silent:true})}
+  if(!DB.finTaxRates){DB.finTaxRates=[];saveData({silent:true})}
+  if(!DB.finExpenseCats){DB.finExpenseCats=[];saveData({silent:true})}
   try{finEnsureArchivePresets()}catch(e){console.warn('ensureArchivePresets',e)}
   try{finEnsureDefaultBank()}catch(e){console.warn('ensureDefaultBank',e)}
   if(!DB.users||!Array.isArray(DB.users)){DB.users=[]}
   if(!DB.users.some(function(u){return u.role==='teacher'})){
     DB.users.push({id:'u1',username:'admin',password:'123@456',role:'teacher',name:'教师管理员',studentId:'',createdAt:today(),isSample:true});
-    saveData();
+    saveData({silent:true});
     try{showToast('已自动恢复教师账号（admin / 123@456）','info')}catch(e){}
   }
+if(_cloudOffline){try{var _tip=$('cloudOfflineTip');if(_tip){_tip.style.display='block';_tip.textContent='⚠ 云端暂不可达（纯云端直读模式：所有数据只认云端，本机不再提供缓存兜底）。此时仅可登录，业务数据无法读写。请检查网络连接后刷新重试，或点顶栏状态条做一次实测诊断。'+(CLOUD_ONLY?'':'')}else{console.warn('cloudOfflineTip 元素缺失')}}catch(e){}}
 var session=getSession();if(session){currentUser=session;enterApp()}
 if(SB)updateSyncStatus()
-$('loginBtn').onclick=function(){$('loginError').style.display='none';if(login($('loginName').value,$('loginPassword').value)){enterApp()}else{$('loginError').style.display='block'}};
+$('loginBtn').onclick=function(){if(login($('loginName').value,$('loginPassword').value)){enterApp()}else{if(_cloudOffline){var _t=$('cloudOfflineTip');if(_t)_t.style.display='block';$('loginError').style.display='none'}else{$('loginError').style.display='block'}}};
 $('registerBtn').onclick=async function(){var u=$('regUsername').value.trim();var p=$('regPassword').value;var p2=$('regPassword2').value;var n=$('regName').value.trim();var sid=$('regStudentId').value.trim();
 if(!u||!p||!n){showToast('请填写完整信息','error');return}if(p!==p2){showToast('两次密码不一致','error');return}
 var r=registerStudent({username:u,password:p,name:n,studentId:sid});if(r.error){showToast(r.error,'error');return}
