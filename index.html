@@ -4,6 +4,10 @@
 <meta charset="UTF-8" data-page-node-id="wtkDqtmW47Gtw1vzHUVDEf">
 <meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="mnvrav12zEjd1kYRymibsK">
 <title>旅行社经营与管理综合实训平台</title>
+<!-- 平台每次更新都要立刻生效：禁止浏览器缓存旧版 HTML，否则学生会一直停留在有卡顿问题的老版本 -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
@@ -81,6 +85,9 @@ th.sortable:hover{background:#f1f5f9}
 .login-toggle{text-align:center;margin-top:16px;font-size:13px;color:var(--text-light)}
 .login-toggle a{color:var(--primary);cursor:pointer;text-decoration:none}
 .login-error{color:var(--danger);font-size:13px;margin-bottom:12px;display:none}
+.form-hint{color:var(--text-light);font-size:12px;margin-top:4px;line-height:1.5}
+.form-hint.compact{font-size:11px;white-space:nowrap;line-height:1.4}
+@media(max-width:480px){.form-hint.compact{white-space:normal}}
 .role-badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600}
 .badge-teacher{background:var(--primary-light);color:var(--primary-dark)}
 .badge-student{background:var(--success-bg);color:var(--success)}
@@ -639,8 +646,8 @@ textarea:focus{border-color:var(--primary)}
 <!-- Login Screen -->
 <div id="loginScreen" data-page-node-id="akxLfDMqIGAzeJSL54dPre">
 <div class="login-card" data-page-node-id="aiRWbqAkV9bv3H1o8uG30j">
-<h1 data-page-node-id="ZBtKFbtdY1PMsab3Kn5RVu">旅行社经营与管理综合实训平台</h1>
-<p class="subtitle" data-page-node-id="UN5lXTbqGqsSCAiVslwtL4">Travel Agency Operations &amp; Management Training Platform</p>
+<h1 id="loginTitle" data-page-node-id="ZBtKFbtdY1PMsab3Kn5RVu">旅行社经营与管理综合实训平台</h1>
+<p class="subtitle" id="loginSubtitle" data-page-node-id="UN5lXTbqGqsSCAiVslwtL4">Travel Agency Operations &amp; Management Training Platform</p>
 <div class="login-error" id="loginError" data-page-node-id="ZNWjSuMEZf5GWGlNxz2wIx">用户名或密码错误</div>
 <div id="cloudOfflineTip" style="display:none;margin:10px 0;padding:10px 12px;border:1px solid #e8b04b;border-radius:8px;background:#fff8ec;color:#8a6d1a;font-size:13px;line-height:1.6"></div>
 <div id="loginForm" data-page-node-id="y5gQzqWIBeSI2t3C17Vu9M">
@@ -651,11 +658,12 @@ textarea:focus{border-color:var(--primary)}
 <div class="login-toggle" data-page-node-id="Ki1yDkAs6DMrByX5R8yuGv"><a id="showForgot" style="color:var(--text-light)" data-page-node-id="rIcAFvswl4YtSblZ02wIWc">忘记密码？</a></div>
 </div>
 <div id="registerForm" style="display:none" data-page-node-id="AR2UFViEIgWCsPlOfiBJOv">
-<div class="form-group" data-page-node-id="qMWHoIAySlY5TtB8ePF3uL"><label data-page-node-id="uepfKBG4vwcRnHAIauZMgf">用户名</label><input type="text" id="regUsername" autocomplete="off" data-page-node-id="NRwEuVkoGI0RmRHeJgqvWJ"></div>
+<div class="form-group" data-page-node-id="qMWHoIAySlY5TtB8ePF3uL"><label data-page-node-id="uepfKBG4vwcRnHAIauZMgf">用户名</label><input type="text" id="regUsername" autocomplete="off" placeholder="如 zhangsan123" data-page-node-id="NRwEuVkoGI0RmRHeJgqvWJ"><div class="form-hint compact" id="regUsernameHint">仅限英文字母和数字，且必须以英文字母开头，不能含特殊符号</div></div>
 <div class="form-group" data-page-node-id="aG6ADNz3goPxyG3JaXZJ6u"><label data-page-node-id="c4hpQFPvYxC9GuApCrQ2hL">密码</label><input type="password" id="regPassword" data-page-node-id="jZQgfKNSG4weDoy00LgMj5"></div>
 <div class="form-group" data-page-node-id="AjA73ljNcMuea9VkgjHlMG"><label data-page-node-id="tMAqG4PLLv4L2TGouo5hnI">确认密码</label><input type="password" id="regPassword2" data-page-node-id="fZNmg87u7uSlvi9GQBpohL"></div>
-<div class="form-group" data-page-node-id="V7wZcCBX1ePG1lSSFZXRb5"><label data-page-node-id="J8Vdjdt6MwBbCvGZcfqfvd">姓名</label><input type="text" id="regName" data-page-node-id="lXOmKlYgOUdlYdcT76fFmI"></div>
-<div class="form-group" data-page-node-id="QMm0lp0Y3bXGQNDGSfoNj2"><label data-page-node-id="pI2LKqyDfyWBn3R9hJNFQC">学号</label><input type="text" id="regStudentId" data-page-node-id="iB1ZDhCUHsv69l8iFhrJGf"></div>
+<div class="form-group" data-page-node-id="V7wZcCBX1ePG1lSSFZXRb5"><label data-page-node-id="J8Vdjdt6MwBbCvGZcfqfvd">姓名</label><input type="text" id="regName" data-page-node-id="lXOmKlYgOUdlYdcT76fFmI"><div class="form-hint compact" id="regNameHint" style="display:none"></div></div>
+<div class="form-group" data-page-node-id="QMm0lp0Y3bXGQNDGSfoNj2"><label data-page-node-id="pI2LKqyDfyWBn3R9hJNFQC">学号</label><input type="text" id="regStudentId" data-page-node-id="iB1ZDhCUHsv69l8iFhrJGf"><div class="form-hint compact" id="regSidHint" style="display:none"></div></div>
+<div class="login-error" id="regError" style="display:none" data-page-node-id="pQwErTyUiOpAsDfGhJkLzX"></div>
 <button class="btn btn-primary btn-block" id="registerBtn" style="margin-top:8px" data-page-node-id="ov0YgNEHFq5LnnyHieki35">注册</button>
 <div class="login-toggle" data-page-node-id="1juVawG8c1HSCm6cQiUGWH">已有账号？<a id="showLogin" data-page-node-id="JGACHgmUDw6L3cyAx5SFqd">返回登录</a></div>
 </div>
@@ -799,11 +807,12 @@ function daysAgo(n){var d=new Date();d.setDate(d.getDate()-n);return d.toISOStri
 function daysFromNow(n){var d=new Date();d.setDate(d.getDate()+n);return d.toISOString().split('T')[0]}
 function showToast(msg,type){type=type||'info';var t=document.createElement('div');t.className='toast toast-'+type;t.textContent=msg;$('toastContainer').appendChild(t);setTimeout(function(){t.classList.add('show')},10);setTimeout(function(){t.classList.remove('show');setTimeout(function(){t.remove()},300)},3000)}
 var SHARED_FIELDS=['suppliers','guides','tourGroups','finAccounts','finTaxRates','finExpenseCats','finApprovalTemplates','finBankAccounts','finOpening','bannedUsers'];
-/* ===== 账号封禁名单 =====
-   这些账号已被注销/停用，任何设备均不可再登录。
-   之所以同时写死在代码里：这些账号原本只存在学生本机浏览器（云端无 acct_ 行），
-   若仅靠云端名单，学生离线时仍能凭本机缓存登录；写死后可离线拦截。 */
-var DISABLED_USER_IDS=['umtgo3pu5l9ak','umtgo3rucnhi0','umtgo40ud8bbg','umtgo42cg96yg','umtgo50qd3dkj','umtgo5a2s2lbb','umtgo5bjwjnba','umtgo5bu8ddch','umtgo5l7rcuy1','umtgo5mgvegi6','umtgo5r5ispc4','umtgo5s6v7gkv','umtgo60qn4xx0','umtgo63x4j8cz','umtgo6otjjbgp','umtgo6qntpyau','umtgo6rwlqovl','umtgo6wiuev8n','umtgo723bgwv0','umtgo73c93rus','umtgo7gueitqx','umtgo7qwsd288','umtgo81ao0e7b','umtgo8269fvwf','umtgo83onrkup','umtgo8br1rr4a','umtgo9547mazr','umtgo99hbbx1o','umtgoox2d7w9f','umtgoq1hn2wj1','umtgos6qc2xqd'];
+/* ===== 账号封禁名单（2026-09-16 起已停用，保留结构备用） =====
+   原先靠「按 id 拉黑」防止已删账号登录。现改为架构级隔离（见 CLOUD_STRICT）：
+   平台**根本不再读取本机 localStorage 的任何账号/业务数据**，所有数据只来自云端，
+   本机缓存既不能登录、也无法被同步回云端。于是"拉黑"失去意义——名单清空，不再发任何删除请求。
+   若将来确需针对个别 id 拦截，往这里和 shared.bannedUsers 加即可，机制仍可用。 */
+var DISABLED_USER_IDS=[];
 function isBanned(uid){
   if(!uid)return false;
   if(DISABLED_USER_IDS.indexOf(uid)>=0)return true;
@@ -869,13 +878,30 @@ function upsertCloudRowAsync(rowId,data){
    原实现每次 saveData 都一次性并发打出约 195 个 POST（1 shared + ~96 user_ + 98 acct_）。
    浏览器对单域名并发上限仅约 6 个，其余全部排队 → 超时/429，队尾的 acct_ 账号行最先失败。
    这就是"我的账号信息写入失败"的根因（Supabase 侧实测写入完全正常）。 */
-function _sigOf(o){try{var s=JSON.stringify(o),h=5381;for(var i=0;i<s.length;i++){h=(((h<<5)+h)+s.charCodeAt(i))>>>0}return s.length+':'+h}catch(e){return ''}}
+/* 内容签名：先递归按键名排序再序列化，使"字段顺序不同但内容相同"得到同一个签名。
+   必须排序：云端返回行的字段顺序是历史写入时的顺序，而内存重组时按 PRIVATE_FIELDS 顺序，
+   两者顺序一旦不同，未排序的签名就会永远判定为"已变化"，导致每次保存把上百行全部重发。 */
+function _sigOf(o){
+  try{
+    var norm=function(v){
+      if(Array.isArray(v))return v.map(norm);
+      if(v&&typeof v==='object'){
+        var out={};Object.keys(v).sort().forEach(function(k){out[k]=norm(v[k])});
+        return out;
+      }
+      return v;
+    };
+    var s=JSON.stringify(norm(o)),h=5381;for(var i=0;i<s.length;i++){h=(((h<<5)+h)+s.charCodeAt(i))>>>0}return s.length+':'+h
+  }catch(e){return ''}
+}
 var _rowSig={};
 try{_rowSig=JSON.parse(localStorage.getItem(DB_KEY+'_rowsig')||'{}')}catch(e){_rowSig={}}
 function _saveRowSig(){try{localStorage.setItem(DB_KEY+'_rowsig',JSON.stringify(_rowSig))}catch(e){}}
-/* 并发限流执行：limit 路并发，失败自动重试 1 次，返回失败项 [{j:{rowId},e}] */
+/* 并发限流执行：limit 路并发，失败自动重试 1 次，返回失败项 [{j:{rowId},e}]
+   6 路：Supabase REST 走 HTTP/2 可多路复用，实测单行 ~400ms，
+   首次全量（教师端约 86 个学生行）由 4 路的 ~17s 降到 ~11s。 */
 function _runCloudJobs(tasks,limit){
-  limit=limit||4;
+  limit=limit||6;
   var i=0,out=[];
   function one(){
     if(i>=tasks.length)return Promise.resolve();
@@ -894,8 +920,10 @@ function _runCloudJobs(tasks,limit){
 }
 function saveAccountCloudAsync(u){
   if(!u||!u.id)return Promise.resolve(true);
-  var row=Object.assign({},u);row.updated_at=new Date().toISOString();
-  try{writeLocalRow(DB_KEY+'_acct_'+u.id,row)}catch(e){}
+  var row=Object.assign({},u);
+  /* 与 saveData 中的 acct_ 行保持完全一致（都不带 updated_at），否则签名对不上会重复写一次 */
+  /* 本机副本已移除（2026-09-16）：账号只写云端，本机不保留 */
+  try{_rowSig['acct_'+u.id]=_sigOf(row);_saveRowSig()}catch(e){}
   try{return upsertCloudRowAsync('acct_'+u.id,row)}catch(e){return Promise.reject(e)}
 }
 function deleteCloudRow(rowId){if(!SB)return;try{SB.from('app_state').delete().eq('id',rowId).then(function(res){if(res.error)console.warn('云端删除失败',res.error)})}catch(e){console.warn('云端删除失败',e)}}
@@ -905,36 +933,59 @@ function migrateLegacyShared(shared){
   if(!hasPriv)return;
   var groups={};
   PRIVATE_FIELDS.forEach(function(f){(po[f]||[]).forEach(function(rec){var k='user_'+(rec.createdBy||'anon');if(!groups[k]){groups[k]={};PRIVATE_FIELDS.forEach(function(g){groups[k][g]=[]})}groups[k][f].push(rec)})});
-  Object.keys(groups).forEach(function(k){writeLocalRow(DB_KEY+'_'+k,groups[k]);upsertCloudRow(k,groups[k])});
+  Object.keys(groups).forEach(function(k){upsertCloudRow(k,groups[k])});   /* 只写云端，本机不存副本 */
   PRIVATE_FIELDS.forEach(function(f){shared[f]=[]});
-  writeLocalRow(DB_KEY,shared);upsertCloudRow(SB_ID,shared);
+  upsertCloudRow(SB_ID,shared);
 }
 function readRawLocal(key){try{var raw=localStorage.getItem(key);if(raw)return JSON.parse(raw)}catch(e){}return null}
 /* 账号独立存储：每个账号一条云端记录（acct_<id>），教师端聚合读取，避免"后注册覆盖先注册"丢号 */
 async function loadAllAccounts(legacyUsers,banned){
   var map={};
-  function add(u){if(u&&u.id&&!map[u.id])map[u.id]=u;}
+  /* 剔除 data 里的历史 updated_at：它是写入时临时加的，属于"非内容"，
+     留着会让签名随读取时点漂移，破坏"内容未变则不发请求"的优化 */
+  /* 记下"已与云端一致"的签名：下次 saveData 时内容没变的账号行就不再重发。
+     账号对象是原子对象（不像业务行要做跨行合并），用内容签名做基准是安全的。 */
+  function add(u){
+    if(!u||!u.id)return;
+    if(u.updated_at){u=Object.assign({},u);delete u.updated_at}
+    try{_rowSig['acct_'+u.id]=_sigOf(u)}catch(e){}
+    if(!map[u.id])map[u.id]=u;
+  }
   if(SB){
     try{var r=await SB.from('app_state').select('id,data').like('id','acct_%');(r.data||[]).forEach(function(x){if(x&&x.data)add(x.data)})}catch(e){console.warn('云端账号读取失败',e)}
   }
-  if(Object.keys(map).length===0){
-    try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k&&k.indexOf(DB_KEY+'_acct_')===0){var o=readRawLocal(k);if(o)add(o)}}}catch(e){console.warn('本地账号读取失败',e)}
-  }
+  /* ⚠ 本机回退已永久移除（2026-09-16）：账号只认云端 acct_ 行。
+     以前这里会在"云端读不到账号"时把本机 localStorage 的 acct_ 残留加载进来，
+     导致已注销的学生仍能凭旧电脑的缓存登录，甚至把缓存同步回云端。现在一律不读。 */
   (legacyUsers||[]).forEach(add);
   /* 封禁清理：剔除停用账号，并删除其云端账号行/业务行与本机残留，确保任何设备都无法再用其登录 */
   var _ban=(banned||[]).concat(DISABLED_USER_IDS);
   if(_ban.length){
+    /* 云端删除对每个 id 只做一次并记档：否则每次加载都发 31×2=62 个 DELETE，
+       在登录页就占满请求队列，是「点注册要等很久」的帮凶。 */
+    var _cleaned={};
+    try{_cleaned=JSON.parse(localStorage.getItem(DB_KEY+'_banclean')||'{}')}catch(e){_cleaned={}}
+    var _dirty=false;
     _ban.forEach(function(id){
       if(!id)return;
+      /* 只有"确实还有残留"才需要删云端：云端已清干净 + 本机无残留 → 一个请求都不发。
+         否则每台新设备打开登录页都会白打 31×2=62 个 DELETE，把请求队列占满。 */
+      var inCloud=!!map[id], hadLocal=false;
+      try{if(localStorage.getItem(DB_KEY+'_acct_'+id)||localStorage.getItem(DB_KEY+'_user_'+id))hadLocal=true}catch(e){}
       delete map[id];
       try{localStorage.removeItem(DB_KEY+'_acct_'+id)}catch(e){}
       try{localStorage.removeItem(DB_KEY+'_user_'+id)}catch(e){}
-      try{deleteCloudRow('acct_'+id)}catch(e){}
-      try{deleteCloudRow('user_'+id)}catch(e){}
+      if((inCloud||hadLocal)&&!_cleaned[id]){
+        try{deleteCloudRow('acct_'+id)}catch(e){}
+        try{deleteCloudRow('user_'+id)}catch(e){}
+        _cleaned[id]=1;_dirty=true;
+      }
     });
+    if(_dirty){try{localStorage.setItem(DB_KEY+'_banclean',JSON.stringify(_cleaned))}catch(e){}}
   }
   var list=Object.keys(map).map(function(k){return map[k]});
   if(list.length===0)list=getDefaultUsers();
+  try{_saveRowSig()}catch(e){}
   return list;
 }
 /* 严格云端读取：任一步云端不可达即返回 null，绝不回退本机缓存。
@@ -948,6 +999,9 @@ async function loadData(){
   migrateLegacyShared(shared);
   var legacyUsers=(shared&&Array.isArray(shared.users))?shared.users:[];
   var d=_sharedPart(shared);
+  /* 记下"刚从云端读到的内容"的签名：下次 saveData 时没变化就不再重发。
+     必须在填充私有字段之前取，否则签名会多出 PRIVATE_FIELDS、与写入内容对不上。 */
+  try{_rowSig[SB_ID]=_sigOf(d);_saveRowSig()}catch(e){}
   PRIVATE_FIELDS.forEach(function(f){d[f]=[]});
   var collect=function(dd){PRIVATE_FIELDS.forEach(function(f){(dd[f]||[]).forEach(function(rec){d[f].push(rec)})})};
   if(currentUser&&currentUser.role==='teacher'){
@@ -955,13 +1009,19 @@ async function loadData(){
       try{
         var r=await SB.from('app_state').select('id,data').like('id','user_%');
         if(r.error){_cloudReadErr=_errText(r.error);return null}
-        (r.data||[]).forEach(function(x){collect(x.data||{})});
+        (r.data||[]).forEach(function(x){
+          collect(x.data||{});
+          /* 同上：把读到的每行内容记为"已同步"基准，避免下次保存把 96 个学生行全重发一遍 */
+          try{_rowSig[x.id]=_sigOf(x.data||{})}catch(e){}
+        });
+        try{_saveRowSig()}catch(e){}
       }catch(e){console.warn('云端聚合失败',e);return null}
     }else{_cloudReadErr='云端未初始化';return null}
   }else if(currentUser){
     var mine=await readCloudRow('user_'+currentUser.id);
     if(!mine){ if(_cloudReadErr)return null; mine={} }
     PRIVATE_FIELDS.forEach(function(f){d[f]=(mine[f]||[])});
+    try{_rowSig['user_'+currentUser.id]=_sigOf(_privatePart(mine));_saveRowSig()}catch(e){}
   }
   d.users=await loadAllAccounts(legacyUsers,shared.bannedUsers||[]);
   /* 记录本次加载到的业务数据规模，供 saveData 的"异常清空保护"比对 */
@@ -1013,7 +1073,7 @@ function _rowDataFor(rowId){
   if(rowId.indexOf('acct_')===0){
     var uid2=rowId.slice(5),u=null;
     (DB.users||[]).forEach(function(x){if(x&&x.id===uid2)u=x});
-    return u?Object.assign({},u,{updated_at:new Date().toISOString()}):null;
+    return u?Object.assign({},u):null;   /* 与 saveData 保持一致，不带 updated_at */
   }
   return null;
 }
@@ -1065,10 +1125,12 @@ function saveData(opts){
   }
   protectTeacher();
   var _tasks=[];
-  function _job(rowId,data,localKey){
-    if(localKey)writeLocalRow(localKey,data);
+  /* ⚠ 2026-09-16 起不再写本机：localKey 参数已废弃（保留形参只为兼容旧调用点，不产生任何本机写入）。
+     平台数据唯一来源是云端，本机一旦留副本就可能"离线登录 + 回灌云端"，这正是要杜绝的。 */
+  function _job(rowId,data){
     var s=_sigOf(data);
-    if(_rowSig[rowId]===s)return;   /* 内容没变 → 不发请求（195 个请求降到个位数的关键） */
+    /* 内容没变 → 不发请求（195 个请求降到个位数的关键） */
+    if(_rowSig[rowId]===s)return;
     _tasks.push({rowId:rowId,data:data,sig:s});
   }
   var shared=_sharedPart(DB);
@@ -1077,8 +1139,16 @@ function saveData(opts){
   PRIVATE_FIELDS.forEach(function(f){(DB[f]||[]).forEach(function(rec){var k='user_'+(rec.createdBy||'anon');if(!groups[k]){groups[k]={};PRIVATE_FIELDS.forEach(function(g){groups[k][g]=[]})}groups[k][f].push(rec)})});
   if(currentUser&&!groups['user_'+currentUser.id]){var eg={};PRIVATE_FIELDS.forEach(function(g){eg[g]=[]});groups['user_'+currentUser.id]=eg;}
   Object.keys(groups).forEach(function(k){_job(k,groups[k])});
-  /* 账号独立持久化：每条账号写一条 acct_<id> 记录，避免整数组覆盖丢号 */
-  (DB.users||[]).forEach(function(u){var row=Object.assign({},u);row.updated_at=new Date().toISOString();_job('acct_'+u.id,row,DB_KEY+'_acct_'+u.id)});
+  /* 账号独立持久化：每条账号写一条 acct_<id> 记录，避免整数组覆盖丢号。
+     ⚠️ 这里绝不能给 row 加 updated_at：时间戳每次都不同，会让内容签名永远"已变化"，
+     导致每次保存都把全部账号行（现已 110 个）重发一遍 → 4 路并发下卡顿十几秒（注册慢的根因）。
+     行级 updated_at 由 upsertCloudRowAsync 统一维护，data 内不必再放。 */
+  /* 学生端只写自己那条账号行：学生无权改他人账号，没必要把 110 行都比对一遍。
+     教师端仍需写全部（账号管理可能改动任意学生账号）。 */
+  (DB.users||[]).forEach(function(u){
+    if(currentUser&&currentUser.role!=='teacher'&&u.id!==currentUser.id)return;
+    _job('acct_'+u.id,Object.assign({},u));
+  });
   /* 内容没变化 → 不发请求；云端本就与内存一致，视为已同步 */
   if(!_tasks.length){_cloudSaving=false;_cloudDirty=false;_lastSyncAt=new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});setCloudState(true);return}
   _cloudSaving=true;_cloudDirty=true;
@@ -1231,40 +1301,19 @@ function runCloudDiag(){
   }
   next();
 }
-/* ---------- 本地残留恢复（URL 加 #recover） ----------
-   早期版本会把业务数据同时存一份到本机 localStorage。若某台电脑还留着，
-   可用它把数据传回云端；只补"云端该行为空"的情况，绝不覆盖云端已有数据。 */
-function runLocalRecover(){
-  var ov=document.createElement('div');
-  ov.style.cssText='position:fixed;inset:0;z-index:99999;background:#f9fafb;overflow:auto;padding:20px;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color:#111827';
-  ov.innerHTML='<h2 style="margin:0 0 4px;font-size:18px">本机残留数据恢复</h2>'+
-    '<div style="color:#6b7280;font-size:12px;margin-bottom:12px;line-height:1.7">扫描本机保存的业务数据，仅当云端对应行为空时才上传，不会覆盖云端现有数据。</div>'+
-    '<div id="rcBox" style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;max-width:920px"></div>';
-  document.body.appendChild(ov);
-  var box=ov.querySelector('#rcBox');
-  var keys=[];
-  try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k&&k.indexOf(DB_KEY+'_user_')===0)keys.push(k)}}catch(e){}
-  if(!keys.length){_diagRow(box,'扫描结果','fail','本机没有找到任何业务数据残留（'+DB_KEY+'_user_*）。');return}
-  _diagRow(box,'扫描结果','ok','找到 '+keys.length+' 个本机数据键，开始比对云端…');
-  var idx=0;
-  function one(){
-    if(idx>=keys.length){_diagRow(box,'完成','ok','处理完毕。请刷新平台查看数据。');return}
-    var k=keys[idx++],rowId=k.slice(DB_KEY.length+1);
-    var raw=null;try{raw=JSON.parse(localStorage.getItem(k))}catch(e){}
-    var n=0;if(raw){PRIVATE_FIELDS.forEach(function(f){n+=(raw[f]||[]).length})}
-    if(!raw||!n){_diagRow(box,rowId,'info','本机为空，跳过');return one()}
-    SB.from('app_state').select('data').eq('id',rowId).maybeSingle().then(function(r){
-      var cn=0;var cd=(r.data&&r.data.data)||{};PRIVATE_FIELDS.forEach(function(f){cn+=(cd[f]||[]).length});
-      if(cn>0){_diagRow(box,rowId,'info','云端已有 '+cn+' 条，跳过（不覆盖）');return null}
-      return upsertCloudRowAsync(rowId,raw).then(function(){
-        _diagRow(box,rowId,'ok','已上传本机 '+n+' 条到云端');
-      },function(e){_diagRow(box,rowId,'fail','上传失败：'+_errText(e))});
-    }).then(one,function(e){_diagRow(box,rowId,'fail','读取云端失败：'+_errText(e));one()});
-  }
-  one();
-}
+/* ---------- 本地残留恢复（已停用） ----------
+   原 #recover 会扫描本机 localStorage 的业务数据并上传云端。
+   2026-09-16 起架构改为「数据只来自云端」，本机不再保存副本，
+   该通道成为唯一可能把本机旧数据回灌云端的口子，故彻底移除（函数本体已删，不留调用路径）。 */
 if(location.hash==='#diag'){window.addEventListener('DOMContentLoaded',function(){setTimeout(function(){try{runCloudDiag()}catch(e){console.error(e)}},50)})}
-if(location.hash==='#recover'){window.addEventListener('DOMContentLoaded',function(){setTimeout(function(){try{runLocalRecover()}catch(e){console.error(e)}},50)})}
+if(location.hash==='#recover'){window.addEventListener('DOMContentLoaded',function(){setTimeout(function(){
+  var ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;z-index:99999;background:#f9fafb;padding:40px;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color:#111827';
+  ov.innerHTML='<h2 style="margin:0 0 8px;font-size:18px">本机数据上传通道已停用</h2>'+
+    '<div style="color:#6b7280;font-size:13px;line-height:1.8;max-width:640px">自 2026-09-16 起，平台所有账号与业务数据<b>只来自云端</b>，'+
+    '本机不再保存任何副本，也不再允许把本机缓存回传到云端。<br>如需恢复历史数据，请联系管理员从云端备份导入。</div>';
+  document.body.appendChild(ov);
+},50)})}
 /* 显示"最后一次真正同步成功"的时刻，而不是每次重绘都刷成当前时间——
    否则切页会让时间跳动，看起来像刚刚同步过，实际并没有。 */
 var _lastSyncAt='';
@@ -1294,21 +1343,30 @@ function retryCloudSync(){
 /* 自动镜像：云端拉取成功后，用云端最新值覆盖本机同名键。
    本机只是"云端副本"，永远不参与展示（CLOUD_ONLY），因此：
    每次同步成功都把本机刷成云端一致 → 旧残留自动消失，彻底不需要手动「清缓存」。 */
-var _lastMirror=0;
-function _mirrorLocalFromDB(force){
-  if(!CLOUD_ONLY||!DB)return;
-  var _n=Date.now();
-  if(!force&&_n-_lastMirror<30000)return;   /* 节流：内容没变化时 30 秒最多写一次本机 */
-  _lastMirror=_n;
+/* 本机残留清理：清除老版本在 localStorage 留下的 wb_tour_platform_* 账号/业务副本。
+   保留 _rowsig（它只是"内容指纹"用于跳过无变化的行，不是业务数据，清掉会导致每次全量重传）。
+   注意：登录态在 sessionStorage（wb_tour_session），不受影响，清完仍保持登录。 */
+var _purgedLocal=false;
+function purgeLocalCache(){
+  var n=0;
   try{
-    writeLocalRow(DB_KEY,_sharedPart(DB));
-    if(currentUser&&currentUser.id){
-      var g=_rowDataFor('user_'+currentUser.id);
-      if(g)writeLocalRow(DB_KEY+'_user_'+currentUser.id,g);
-      var me=null;(DB.users||[]).forEach(function(u){if(u&&u.id===currentUser.id)me=u});
-      if(me)writeLocalRow(DB_KEY+'_acct_'+currentUser.id,Object.assign({},me,{updated_at:new Date().toISOString()}));
+    var del=[];
+    for(var i=0;i<localStorage.length;i++){
+      var k=localStorage.key(i);
+      if(k&&k.indexOf(DB_KEY)===0&&k!==DB_KEY+'_rowsig')del.push(k);
     }
+    del.forEach(function(k){try{localStorage.removeItem(k);n++}catch(e){}});
   }catch(e){}
+  return n;
+}
+/* 原「把云端数据镜像写本机」已废弃（2026-09-16）。改为：进入平台后清理一次本机残留。
+   这样本机永远不会再有账号/业务副本，也就无从"被同步到云端"。 */
+function _mirrorLocalFromDB(force){
+  if(!CLOUD_ONLY)return;
+  if(_purgedLocal)return;
+  _purgedLocal=true;
+  var n=purgeLocalCache();
+  if(n)console.warn('[云端直读] 已清除本机残留 '+n+' 项：平台数据只来自云端，本机不再保存任何副本');
 }
 /* ================= 云端直读核心（2026-09-11） ================= */
 function _isTyping(){
@@ -1562,9 +1620,7 @@ function downloadFile(content,filename,mime){var blob=new Blob([content],{type:(
 /* Default Data */
 function getDefaultUsers(){
 return [
-{id:'u1',username:'admin',password:'123@456',role:'teacher',name:'教师管理员',studentId:'',createdAt:'2026-01-01',isSample:true},
-{id:'u2',username:'student1',password:'123456',role:'student',name:'张三',studentId:'2024001',createdAt:'2026-01-01',isSample:true},
-{id:'u3',username:'student2',password:'123456',role:'student',name:'李四',studentId:'2024002',createdAt:'2026-01-01',isSample:true}
+{id:'u1',username:'admin',password:'123@456',role:'teacher',name:'教师管理员',studentId:'',createdAt:'2026-01-01',isSample:true}
 ];
 }
 function getDefaultData(){
@@ -1611,11 +1667,11 @@ var tourGroups=[
 ]}
 ];
 var orders=[
-{id:'o1',orderNo:'ORD2026080001',customerName:'王建国',contactPhone:'13900001111',idCard:'530102199001011234',pax:5,tourGroupId:'t1',departureDate:'2026-08-15',status:'已签约',teamMembers:mkMembers(5,'王建国'),createdBy:'u2',createdAt:'2026-08-01',isSample:true},
-{id:'o2',orderNo:'ORD2026070002',customerName:'刘芳',contactPhone:'13900002222',idCard:'530102198503052345',pax:3,tourGroupId:'t2',departureDate:'2026-08-20',status:'未签约',teamMembers:mkMembers(3,'刘芳'),createdBy:'u2',createdAt:'2026-07-28',isSample:true},
-{id:'o3',orderNo:'ORD2026080003',customerName:'陈伟',contactPhone:'13900003333',idCard:'530102199203103456',pax:8,tourGroupId:'t1',departureDate:'2026-08-15',status:'未签约',teamMembers:mkMembers(8,'陈伟'),createdBy:'u3',createdAt:'2026-08-05',isSample:true},
-{id:'o4',orderNo:'ORD2026080004',customerName:'赵敏',contactPhone:'13900004444',idCard:'530102198812204567',pax:4,tourGroupId:'t2',departureDate:'2026-08-20',status:'已签约',teamMembers:mkMembers(4,'赵敏'),createdBy:'u3',createdAt:'2026-08-08',isSample:true},
-{id:'o5',orderNo:'ORD2026080005',customerName:'孙强',contactPhone:'13900005555',idCard:'530102199506067890',pax:12,tourGroupId:'t3',departureDate:'2026-08-11',status:'已签约',teamMembers:mkMembers(12,'孙强'),createdBy:'u2',createdAt:'2026-08-09',isSample:true}
+{id:'o1',orderNo:'ORD2026080001',customerName:'王建国',contactPhone:'13900001111',idCard:'530102199001011234',pax:5,tourGroupId:'t1',departureDate:'2026-08-15',status:'已签约',teamMembers:mkMembers(5,'王建国'),createdBy:'u1',createdAt:'2026-08-01',isSample:true},
+{id:'o2',orderNo:'ORD2026070002',customerName:'刘芳',contactPhone:'13900002222',idCard:'530102198503052345',pax:3,tourGroupId:'t2',departureDate:'2026-08-20',status:'未签约',teamMembers:mkMembers(3,'刘芳'),createdBy:'u1',createdAt:'2026-07-28',isSample:true},
+{id:'o3',orderNo:'ORD2026080003',customerName:'陈伟',contactPhone:'13900003333',idCard:'530102199203103456',pax:8,tourGroupId:'t1',departureDate:'2026-08-15',status:'未签约',teamMembers:mkMembers(8,'陈伟'),createdBy:'u1',createdAt:'2026-08-05',isSample:true},
+{id:'o4',orderNo:'ORD2026080004',customerName:'赵敏',contactPhone:'13900004444',idCard:'530102198812204567',pax:4,tourGroupId:'t2',departureDate:'2026-08-20',status:'已签约',teamMembers:mkMembers(4,'赵敏'),createdBy:'u1',createdAt:'2026-08-08',isSample:true},
+{id:'o5',orderNo:'ORD2026080005',customerName:'孙强',contactPhone:'13900005555',idCard:'530102199506067890',pax:12,tourGroupId:'t3',departureDate:'2026-08-11',status:'已签约',teamMembers:mkMembers(12,'孙强'),createdBy:'u1',createdAt:'2026-08-09',isSample:true}
 ];
 var financeRecords=[];
 var guides=[
@@ -1685,10 +1741,21 @@ var u=DB.users.find(function(x){return x.username===username});
 if(u&&isBanned(u.id)){try{showToast('该账号已被停用，无法登录','error')}catch(e){}return false}
 if(u&&u.password===password){currentUser={id:u.id,username:u.username,role:u.role,name:u.name};setSession(currentUser);return true}
 return false}
+/* 注册唯一性：用户名 / 学号 / 姓名 三者都只能有一个账号（比较前统一去空格、忽略大小写） */
+function _regNorm(s){return String(s==null?'':s).replace(/\s/g,'').toLowerCase()}
+function findUserByStudentId(sid){var k=_regNorm(sid);if(!k)return null;
+  return (DB.users||[]).filter(function(x){return x&&x.role!=='teacher'&&_regNorm(x.studentId)===k})[0]||null}
+function findUserByName(nm){var k=_regNorm(nm);if(!k)return null;
+  return (DB.users||[]).filter(function(x){return x&&x.role!=='teacher'&&_regNorm(x.name)===k})[0]||null}
 function registerStudent(data){
-if(DB.users.some(function(x){return x.username===data.username}))return{error:'用户名已存在'};
+if(DB.users.some(function(x){return x.username===data.username}))return{error:'该用户名已被注册，请换一个'};
+if(findUserByStudentId(data.studentId))return{error:'该学号已注册过账号，一个学号只能注册一个账号'};
+if(findUserByName(data.name))return{error:'该姓名已注册过账号，每个学生只能注册一个账号'};
 var u={id:genId('u'),username:data.username,password:data.password,role:'student',name:data.name,studentId:data.studentId,createdAt:today()};
-DB.users.push(u);saveData();return{success:true,user:u,cloud:saveAccountCloudAsync(u)}}
+DB.users.push(u);
+/* 账号各存一条 acct_<id> 行，注册只需写这一行。
+   ⚠️ 不调用全量 saveData()：它会遍历 DB.users 逐行比对，账号越多越慢（现已 110 个）。 */
+return{success:true,user:u,cloud:saveAccountCloudAsync(u)}}
 /* Navigation */
 function renderPageOnly(page){
 currentPage=page;
@@ -4318,6 +4385,9 @@ function enterApp(){
 async function initApp(){
 /* 一次性清理旧格式待传队列：旧版存的是"数据快照"，补传会覆盖云端更新的数据，必须丢弃 */
 try{var _rp=localStorage.getItem(PENDING_KEY);if(_rp){var _ro=JSON.parse(_rp)||{};if(Object.keys(_ro).some(function(k){return _ro[k]&&typeof _ro[k]==='object'})){localStorage.removeItem(PENDING_KEY);console.warn('已清理旧格式待传队列（含过时数据快照）')}}}catch(e){}
+/* 架构级隔离（2026-09-16）：进入平台先清掉本机残留的账号/业务副本。
+   自此本机不再持有任何平台数据 → 既不能离线登录旧账号，也无法把缓存回灌云端。 */
+try{var _pn=purgeLocalCache();if(_pn)console.warn('[云端直读] 启动时清除本机残留 '+_pn+' 项')}catch(e){}
 DB=await loadData();
 _dbFromCloud=!!DB;
 if(!DB){
@@ -4330,7 +4400,9 @@ if(!DB){
 /* 云端连通性探测：决定登录页是否提示"离线"，避免把网络问题误显示成致命报错 */
 try{if(SB){var _cp=await SB.from('app_state').select('id').eq('id',SB_ID).maybeSingle();if(_cp.error){_cloudOffline=true;_cloudErrText=_errText(_cp.error)}}else{_cloudOffline=true}}catch(e){_cloudOffline=true}
 /* 只有确认数据来自云端才允许回写，否则离线空数据会覆盖云端真实数据 */
-if(_dbFromCloud){try{if(currentUser)syncAllPayables();saveData({silent:true})}catch(e){console.warn('syncPayables',e)}}
+/* 仅已登录时才做这次同步保存：登录页（无 session）没有待同步的业务数据，
+   跑一次全量 saveData 只会白打上百个请求、让登录页一打开就卡。 */
+if(_dbFromCloud&&currentUser){try{syncAllPayables();saveData({silent:true})}catch(e){console.warn('syncPayables',e)}}
   if(!DB.guides){DB.guides=[];saveData({silent:true})}
   if(!DB.finAgencyFees){DB.finAgencyFees=[];saveData({silent:true})}
   if(!DB.finGuideReimbursements){DB.finGuideReimbursements=[];saveData({silent:true})}
@@ -4350,17 +4422,73 @@ var session=getSession();if(session){currentUser=session;enterApp()}
 if(SB)updateSyncStatus()
 $('loginBtn').onclick=function(){if(login($('loginName').value,$('loginPassword').value)){enterApp()}else{if(_cloudOffline){var _t=$('cloudOfflineTip');if(_t)_t.style.display='block';$('loginError').style.display='none'}else{$('loginError').style.display='block'}}};
 $('registerBtn').onclick=async function(){var u=$('regUsername').value.trim();var p=$('regPassword').value;var p2=$('regPassword2').value;var n=$('regName').value.trim();var sid=$('regStudentId').value.trim();
-if(!u||!p||!n){showToast('请填写完整信息','error');return}if(p!==p2){showToast('两次密码不一致','error');return}
-var r=registerStudent({username:u,password:p,name:n,studentId:sid});if(r.error){showToast(r.error,'error');return}
+var regErr=$('regError');
+function _regFail(msg){if(regErr){regErr.textContent=msg;regErr.style.display='block'}showToast(msg,'error')}
+if(regErr)regErr.style.display='none';
+/* 全字段必填：用户名/密码/确认密码/姓名/学号，缺一不可 */
+if(!u||!p||!p2||!n||!sid){_regFail('请填写完整：用户名、密码、确认密码、姓名、学号均为必填');return}
+/* 用户名规则：英文字母，或英文字母+数字；必须以字母开头，不含中文/空格/特殊符号 */
+if(!/^[A-Za-z][A-Za-z0-9]*$/.test(u)){_regFail('用户名只能用英文字母和数字，且必须以英文字母开头（不能含中文、空格或特殊符号）');return}
+if(u.length<3){_regFail('用户名至少 3 位');return}
+if(p.length<6){_regFail('密码至少 6 位');return}
+if(p!==p2){_regFail('两次输入的密码不一致');return}
+/* 查重前先拉一次云端最新账号：否则两台设备用同一学号/姓名同时注册会都通过 */
+await refreshAccountsForRegister();
+var r=registerStudent({username:u,password:p,name:n,studentId:sid});if(r.error){_regFail(r.error);return}
 var _rb=this;var _rtxt=_rb?_rb.textContent:'';if(_rb){_rb.disabled=true;_rb.textContent='同步中...'}
 try{await r.cloud;showToast('注册成功，请登录','success')}
 catch(e){showToast('注册已保存到本机，但同步云端失败，换其他设备可能登不上，请检查网络后重试','error')}
 if(_rb){_rb.disabled=false;_rb.textContent=_rtxt}
 $('showLogin').click();$('loginName').value=u};
-$('showRegister').onclick=function(){$('loginForm').style.display='none';$('registerForm').style.display='block';$('loginError').style.display='none'};
-$('showLogin').onclick=function(){$('loginForm').style.display='block';$('registerForm').style.display='none'};
-$('showForgot').onclick=function(){$('loginForm').style.display='none';$('forgotForm').style.display='block';$('loginError').style.display='none';$('fpError').style.display='none'};
-$('showLoginFp').onclick=function(){$('forgotForm').style.display='none';$('loginForm').style.display='block';$('fpError').style.display='none'};
+/* 用户名实时格式提示：边输入边判断，避免点注册才报错 */
+var REG_USERNAME_RE=/^[A-Za-z][A-Za-z0-9]*$/;
+var REG_USERNAME_HINT='仅限英文字母和数字，且必须以英文字母开头，不能含特殊符号';
+/* 注册前刷新云端账号：只拉 acct_ 行并合并进 DB.users，不发任何写请求。
+   目的——两台设备用同一学号/姓名同时注册时，后提交的一方也能被拦住（否则各自内存快照都"查无此人"）。 */
+async function refreshAccountsForRegister(){
+  if(!SB)return;
+  try{
+    var r=await SB.from('app_state').select('id,data').like('id','acct_%');
+    if(!DB.users||!Array.isArray(DB.users))DB.users=[];
+    ((r&&r.data)||[]).forEach(function(x){
+      var u=x&&x.data;if(!u||!u.id)return;
+      if(u.updated_at){u=Object.assign({},u);delete u.updated_at}
+      var ex=null;DB.users.forEach(function(y){if(y&&y.id===u.id)ex=y});
+      if(!ex){DB.users.push(u);return}
+      Object.keys(ex).forEach(function(k){delete ex[k]});Object.assign(ex,u);
+    });
+  }catch(e){console.warn('注册前刷新云端账号失败（本次查重将基于当前内存数据）',e)}
+}
+/* 学号 / 姓名 失焦即查重（红 ✗ / 绿 ✓），避免填完点注册才被拒 */
+function regMark(hintId,v,takenMsg,okMsg,dup){
+  var h=$(hintId);if(!h)return;
+  if(!v){h.style.display='none';h.style.color='';h.textContent='';return}
+  h.style.display='block';
+  if(dup){h.style.color='var(--danger)';h.textContent=takenMsg}
+  else{h.style.color='var(--success)';h.textContent=okMsg}
+}
+$('regStudentId').onblur=function(){var v=this.value.trim();regMark('regSidHint',v,'✗ 该学号已注册，一人仅限一个账号','✓ 学号可用',!!(v&&findUserByStudentId(v)))};
+$('regName').onblur=function(){var v=this.value.trim();regMark('regNameHint',v,'✗ 该姓名已注册，一人仅限一个账号','✓ 姓名可用',!!(v&&findUserByName(v)))};
+/* 登录卡片标题随表单切换：登录=平台全名(22px)，注册/重置密码=简短标题(16px，比「用户名」标签14px大一号) */
+function setLoginTitle(mode){
+  var t=$('loginTitle'),s=$('loginSubtitle');if(!t)return;
+  if(mode==='register'||mode==='forgot'){t.textContent=(mode==='register'?'用户注册':'重置密码');t.style.fontSize='16px';if(s)s.style.display='none'}
+  else{t.textContent='旅行社经营与管理综合实训平台';t.style.fontSize='';if(s)s.style.display=''}
+}
+$('regUsername').oninput=function(){
+  var v=this.value.trim(),hint=$('regUsernameHint');if(!hint)return;
+  if(!v){hint.style.color='';hint.textContent=REG_USERNAME_HINT;return}
+  if(!REG_USERNAME_RE.test(v)){hint.style.color='var(--danger)';hint.textContent='✗ 格式不符：只能用英文字母和数字，且必须以英文字母开头';return}
+  if(v.length<3){hint.style.color='var(--danger)';hint.textContent='✗ 用户名至少 3 位';return}
+  if((DB.users||[]).some(function(x){return x&&x.username===v})){hint.style.color='var(--danger)';hint.textContent='✗ 该用户名已被注册';return}
+  hint.style.color='var(--success)';hint.textContent='✓ 格式正确，且未被注册';
+};
+$('showRegister').onclick=function(){$('loginForm').style.display='none';$('registerForm').style.display='block';$('loginError').style.display='none';var _re=$('regError');if(_re)_re.style.display='none';var _h=$('regUsernameHint');if(_h){_h.style.color='';_h.textContent=REG_USERNAME_HINT}
+['regNameHint','regSidHint'].forEach(function(id){var e=$(id);if(e){e.style.display='none';e.style.color='';e.textContent=''}});
+setLoginTitle('register')};
+$('showLogin').onclick=function(){$('loginForm').style.display='block';$('registerForm').style.display='none';setLoginTitle('login')};
+$('showForgot').onclick=function(){$('loginForm').style.display='none';$('forgotForm').style.display='block';$('loginError').style.display='none';$('fpError').style.display='none';setLoginTitle('forgot')};
+$('showLoginFp').onclick=function(){$('forgotForm').style.display='none';$('loginForm').style.display='block';$('fpError').style.display='none';setLoginTitle('login')};
 $('forgotBtn').onclick=async function(){
 var u=$('fpUsername').value.trim();var v=$('fpVerify').value.trim();var p=$('fpPassword').value;var p2=$('fpPassword2').value;var fpErr=$('fpError');fpErr.style.display='none';
 if(!u||!v||!p){fpErr.textContent='请填写完整信息';fpErr.style.display='block';return}
@@ -4371,7 +4499,7 @@ if(!user){fpErr.textContent='用户名不存在';fpErr.style.display='block';ret
 if(user.role==='teacher'){fpErr.textContent='教师账号不支持自助找回，请联系管理员';fpErr.style.display='block';return}
 var ok=(user.studentId&&user.studentId===v)||(user.name&&user.name===v);
 if(!ok){fpErr.textContent='学号或姓名验证失败';fpErr.style.display='block';return}
-user.password=p;saveData();
+user.password=p;   /* 不调用全量 saveData()：下面 saveAccountCloudAsync(user) 只写这一条账号行即可 */
 var _fb=this;var _ftxt=_fb?_fb.textContent:'';if(_fb){_fb.disabled=true;_fb.textContent='同步中...'}
 try{await saveAccountCloudAsync(user);showToast('密码已重置并同步到云端，请用新密码登录','success')}
 catch(e){if(_fb){_fb.disabled=false;_fb.textContent=_ftxt}fpErr.textContent='新密码已在本机生效，但同步到云端失败，换其他设备仍无法登录，请检查网络后重试';fpErr.style.display='block';return}
