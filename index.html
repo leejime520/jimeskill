@@ -807,6 +807,12 @@ function daysAgo(n){var d=new Date();d.setDate(d.getDate()-n);return d.toISOStri
 function daysFromNow(n){var d=new Date();d.setDate(d.getDate()+n);return d.toISOString().split('T')[0]}
 function showToast(msg,type){type=type||'info';var t=document.createElement('div');t.className='toast toast-'+type;t.textContent=msg;$('toastContainer').appendChild(t);setTimeout(function(){t.classList.add('show')},10);setTimeout(function(){t.classList.remove('show');setTimeout(function(){t.remove()},300)},3000)}
 var SHARED_FIELDS=['suppliers','guides','tourGroups','finAccounts','finTaxRates','finExpenseCats','finApprovalTemplates','finBankAccounts','finOpening','bannedUsers'];
+/* 共享档案拆分存储（2026-10-10 B 方案）：
+   8 类"数组型"共享档案（供应商/导游/团期/财务基础）改按"每条记录一行"（shr_<字段>_<id>）存储，
+   彻底消除"多人整行覆盖"导致的并发丢失；finOpening/bannedUsers 为非数组元信息，仍留在 shared 单行（极少改动，冲突可忽略）。
+   可见性逻辑（getVisibleData）完全不变：内存里仍拼回原数组，只改云端存取方式。 */
+var SHARED_ROW_META=['finOpening','bannedUsers'];
+var SHARED_ARRAY_FIELDS=SHARED_FIELDS.filter(function(f){return SHARED_ROW_META.indexOf(f)<0});
 /* ===== 账号封禁名单（2026-09-16 起已停用，保留结构备用） =====
    原先靠「按 id 拉黑」防止已删账号登录。现改为架构级隔离（见 CLOUD_STRICT）：
    平台**根本不再读取本机 localStorage 的任何账号/业务数据**，所有数据只来自云端，
@@ -846,7 +852,7 @@ function normalizeDB(d){
   });
   return d
 }
-function _sharedPart(d){var o={};SHARED_FIELDS.forEach(function(f){o[f]=d[f]||[]});return o}
+function _sharedPart(d){var o={};SHARED_ROW_META.forEach(function(f){o[f]=d[f]});return o}
 function _privatePart(d){var o={};PRIVATE_FIELDS.forEach(function(f){o[f]=d[f]||[]});return o}
 /* 读取云端单行。返回 null 有两种含义，靠 _cloudReadErr 区分：
    _cloudReadErr 非空 → 云端不可达（严格失败，不可回退本机）
@@ -895,6 +901,11 @@ function _sigOf(o){
   }catch(e){return ''}
 }
 var _rowSig={};
+/* 已装载到内存的"记录型共享档案"行集合：{字段:{记录id:createdBy}}，用于 saveData 判定"哪些记录被删除" */
+var _loadedRecIds={};
+/* 首次加载走了"legacy 回退"（云端尚无任何 shr_* 行，shared 仍含整行数组）→ 标记需清理：
+   下次保存强制把 shared 改写成 meta-only，清掉遗留的整行数组，避免日后所有 shr_* 被删时空回弹。 */
+var _sharedLegacyClean=false;
 try{_rowSig=JSON.parse(localStorage.getItem(DB_KEY+'_rowsig')||'{}')}catch(e){_rowSig={}}
 function _saveRowSig(){try{localStorage.setItem(DB_KEY+'_rowsig',JSON.stringify(_rowSig))}catch(e){}}
 /* 并发限流执行：limit 路并发，失败自动重试 1 次，返回失败项 [{j:{rowId},e}]
@@ -994,14 +1005,40 @@ async function loadData(){
   var shared=await readCloudRow(SB_ID);
   if(!shared){
     if(_cloudReadErr)return null;   /* 云端不可达 → 严格失败 */
-    shared=getDefaultData();        /* 云端可达但库为空 → 首次初始化 */
+    shared=getDefaultData();        /* 云端可达但 meta 行缺失 → 首次初始化（含内置样例） */
   }
   migrateLegacyShared(shared);
   var legacyUsers=(shared&&Array.isArray(shared.users))?shared.users:[];
-  var d=_sharedPart(shared);
-  /* 记下"刚从云端读到的内容"的签名：下次 saveData 时没变化就不再重发。
-     必须在填充私有字段之前取，否则签名会多出 PRIVATE_FIELDS、与写入内容对不上。 */
-  try{_rowSig[SB_ID]=_sigOf(d);_saveRowSig()}catch(e){}
+  /* 清空上次装载的记录索引，避免残留旧 id 导致误删 */
+  for(var _rk in _loadedRecIds)delete _loadedRecIds[_rk];
+  var d={};
+  SHARED_ARRAY_FIELDS.forEach(function(f){d[f]=[]});   /* 数组型共享档案从 shr_* 行装载 */
+  /* B 方案：把"数组型共享档案"从单一 shared 大行拆成每条记录一行（shr_<字段>_<id>），
+     既消除并发整行覆盖，又在内存里拼回原数组；可见性逻辑（getVisibleData）完全不变。 */
+  var _shrCount=0;
+  if(SB){
+    try{
+      var _sr=await SB.from('app_state').select('id,data').like('id','shr_%');
+      if(_sr.error){_cloudReadErr=_errText(_sr.error);return null}
+      (_sr.data||[]).forEach(function(x){
+        var _dd=x.data||{};var _t=_dd.type;var _rec=_dd.rec||_dd;
+        if(!_t||SHARED_ARRAY_FIELDS.indexOf(_t)<0)return;
+        d[_t].push(_rec);_shrCount++;
+        try{_rowSig[x.id]=_sigOf(_dd);_loadedRecIds[_t]=_loadedRecIds[_t]||{};_loadedRecIds[_t][_rec.id]=_rec.createdBy||'u1'}catch(e){}
+      });
+      try{_saveRowSig()}catch(e){}
+    }catch(e){console.warn('云端共享档案读取失败',e);return null}
+  }else{_cloudReadErr='云端未初始化';return null}
+  if(_shrCount===0){
+    /* 云端尚无任何共享档案行 → 用 shared 遗留数组或内置样例初始化（首次/迁移场景）。
+       标记需清理：下次保存时强制把 shared 改写成 meta-only，清掉遗留的整行数组。 */
+    var _legacy=false;
+    SHARED_ARRAY_FIELDS.forEach(function(f){ if(Array.isArray(shared[f])&&shared[f].length){ d[f]=shared[f]; _legacy=true; } });
+    if(_legacy)_sharedLegacyClean=true;
+  }
+  var _meta=_sharedPart(shared);
+  SHARED_ROW_META.forEach(function(f){ if(_meta[f]!==undefined) d[f]=_meta[f]; });
+  try{_rowSig[SB_ID]=_sigOf(_meta);_saveRowSig()}catch(e){}
   PRIVATE_FIELDS.forEach(function(f){d[f]=[]});
   var collect=function(dd){PRIVATE_FIELDS.forEach(function(f){(dd[f]||[]).forEach(function(rec){d[f].push(rec)})})};
   if(currentUser&&currentUser.role==='teacher'){
@@ -1047,7 +1084,8 @@ function pendingCount(){return Object.keys(_loadPending()).length}
 function pendingList(){return Object.keys(_loadPending())}
 /* 待传行的中文说明，便于直接看懂"到底是哪几项" */
 function pendingLabel(id){
-  if(id===SB_ID)return '共享档案（供应商/导游/团期/财务基础档案）';
+  if(id===SB_ID)return '共享档案（财务期初/封禁名单）';
+  if(id.indexOf('shr_')===0)return '共享档案记录（'+id.slice(4)+'）';
   if(id.indexOf('user_')===0)return '我的业务数据（订单/收款/付款/合同等）';
   if(id.indexOf('acct_')===0)return '我的账号信息';
   return id;
@@ -1057,6 +1095,7 @@ function clearPendingWrites(){try{localStorage.removeItem(PENDING_KEY)}catch(e){
 function _shouldQueue(rowId){
   if(!rowId)return false;
   if(rowId===SB_ID)return true;
+  if(rowId.indexOf('shr_')===0)return true;   /* 共享档案记录行：写失败也要补传 */
   if(currentUser&&rowId==='user_'+currentUser.id)return true;
   if(currentUser&&rowId==='acct_'+currentUser.id)return true;
   return false;
@@ -1065,6 +1104,13 @@ function _shouldQueue(rowId){
 function _rowDataFor(rowId){
   if(!DB)return null;
   if(rowId===SB_ID)return _sharedPart(DB);
+  /* B 方案：shr_<字段>_<id> 行补传时，在 DB 里按字段+id 找回记录重新生成 {type,rec} */
+  if(rowId.indexOf('shr_')===0){
+    var _body=rowId.slice(4),_f=null;
+    SHARED_ARRAY_FIELDS.forEach(function(ff){if(!_f&&_body.indexOf(ff+'_')===0)_f=ff});
+    if(_f){var _rid=_body.slice(_f.length+1),_found=null;(DB[_f]||[]).forEach(function(r){if(r&&r.id===_rid)_found=r});return _found?{type:_f,rec:_found}:null}
+    return null;
+  }
   if(rowId.indexOf('user_')===0){
     var uid=rowId.slice(5),g={};
     PRIVATE_FIELDS.forEach(function(f){g[f]=(DB[f]||[]).filter(function(r){return (r.createdBy||'anon')===uid})});
@@ -1125,6 +1171,7 @@ function saveData(opts){
   }
   protectTeacher();
   var _tasks=[];
+  var _deletes=[];   /* B 方案：被删除的"记录型共享档案"行（shr_<字段>_<id>），需单独 DELETE */
   /* ⚠ 2026-09-16 起不再写本机：localKey 参数已废弃（保留形参只为兼容旧调用点，不产生任何本机写入）。
      平台数据唯一来源是云端，本机一旦留副本就可能"离线登录 + 回灌云端"，这正是要杜绝的。 */
   function _job(rowId,data){
@@ -1133,8 +1180,29 @@ function saveData(opts){
     if(_rowSig[rowId]===s)return;
     _tasks.push({rowId:rowId,data:data,sig:s});
   }
+  function _jobDel(rowId){if(_deletes.indexOf(rowId)<0)_deletes.push(rowId);}
   var shared=_sharedPart(DB);
-  _job(SB_ID,shared);              /* 业务数据不再写本机：纯云端模式本机不参与展示 */
+  if(_sharedLegacyClean){
+    /* 迁移场景：即便 meta 内容未变也强制重写 shared 为 meta-only，清掉遗留整行数组 */
+    _tasks.push({rowId:SB_ID,data:shared,sig:_sigOf(shared)});
+    _sharedLegacyClean=false;
+  }else{
+    _job(SB_ID,shared);              /* 只写 meta（财务期初/封禁），数组已拆分到 shr_* 行 */
+  }
+  /* B 方案核心：8 类"数组型"共享档案逐条写成 shr_<字段>_<id> 单行，彻底消除并发整行覆盖 */
+  SHARED_ARRAY_FIELDS.forEach(function(f){
+    var cur={};
+    (DB[f]||[]).forEach(function(rec){
+      if(!rec)return;
+      if(!rec.id)rec.id=f.slice(0,2)+'_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);
+      cur[rec.id]=true;
+      _job('shr_'+f+'_'+rec.id,{type:f,rec:rec});
+    });
+    /* 删除判定：本次加载时云端有、现在内存里没了 → 删对应行。
+       仅基于"我自己这次加载到的索引"(_loadedRecIds)判定，不会误删别人在我加载之后新增的记录（不在我的索引里）。 */
+    var _loaded=_loadedRecIds[f];
+    if(_loaded){Object.keys(_loaded).forEach(function(rid){if(!cur[rid])_jobDel('shr_'+f+'_'+rid);});}
+  });
   var groups={};
   PRIVATE_FIELDS.forEach(function(f){(DB[f]||[]).forEach(function(rec){var k='user_'+(rec.createdBy||'anon');if(!groups[k]){groups[k]={};PRIVATE_FIELDS.forEach(function(g){groups[k][g]=[]})}groups[k][f].push(rec)})});
   if(currentUser&&!groups['user_'+currentUser.id]){var eg={};PRIVATE_FIELDS.forEach(function(g){eg[g]=[]});groups['user_'+currentUser.id]=eg;}
@@ -1149,10 +1217,13 @@ function saveData(opts){
     if(currentUser&&currentUser.role!=='teacher'&&u.id!==currentUser.id)return;
     _job('acct_'+u.id,Object.assign({},u));
   });
-  /* 内容没变化 → 不发请求；云端本就与内存一致，视为已同步 */
-  if(!_tasks.length){_cloudSaving=false;_cloudDirty=false;_lastSyncAt=new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});setCloudState(true);return}
+  /* 内容没变化（且无删除）→ 不发请求；云端本就与内存一致，视为已同步 */
+  if(!_tasks.length&&!_deletes.length){_cloudSaving=false;_cloudDirty=false;_lastSyncAt=new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});setCloudState(true);return}
   _cloudSaving=true;_cloudDirty=true;
   _runCloudJobs(_tasks).then(function(failed){
+    /* 删除行：与 upsert 平行执行，量级很小（仅被删记录）。先删后写避免"刚删又因缓存被加回"的竞态。
+       删除失败不进待补传队列：下次保存若该记录仍缺失会自动重试删除。 */
+    _deletes.forEach(function(rid){deleteCloudRow(rid)});
     _cloudSaving=false;
     if(failed.length){
       /* 只登记"哪几行没传成功"，数据待补传时用当前 DB 现算，绝不存旧快照 */
