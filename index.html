@@ -3724,19 +3724,24 @@ function finSaveBank(id){var name=$('ffb_name').value.trim();if(!name){showToast
 function finDelBank(id){var a=DB.finBankAccounts.find(function(x){return x.id===id});if(!a)return;showConfirm('确认删除财务账号「'+a.name+'」？删除后账户将不再用于收款付款单据。',function(){DB.finBankAccounts=DB.finBankAccounts.filter(function(x){return x.id!==id});saveData();renderFinance();showToast('已删除','success');finLog('删除财务账号',a.name)})}
 /* Account Management */
 var accountPage=1;
+var _acctSearch='';
 function renderAccount(){
 if(currentUser.role!=='teacher'){showPage('dashboard');return}
+if($('acctSearchInput'))_acctSearch=$('acctSearchInput').value;
+var _wasSearch=document.activeElement&&document.activeElement.id==='acctSearchInput';
 var PER=20;
 /* 管理员账号（id=u1 或 username=admin）永远置顶第一行，其余按原顺序 */
 var _users=DB.users.slice();
 var _ai=_users.findIndex(function(u){return u.id==='u1'||u.username==='admin'});
 if(_ai>0){var _admin=_users.splice(_ai,1)[0];_users.unshift(_admin);}
+if(_acctSearch){var _q=_acctSearch.toLowerCase();_users=_users.filter(function(u){return (u.name&&u.name.toLowerCase().indexOf(_q)>=0)||(u.studentId&&(''+u.studentId).toLowerCase().indexOf(_q)>=0)||(u.username&&u.username.toLowerCase().indexOf(_q)>=0)})}
 var _total=_users.length;
 var _tp=Math.max(1,Math.ceil(_total/PER));
 if(accountPage>_tp)accountPage=_tp;if(accountPage<1)accountPage=1;
 var _start=(accountPage-1)*PER;
 var _pageUsers=_users.slice(_start,_start+PER);
 var html='<div class="card"><div class="card-title">账号管理 <span style="font-size:13px;color:var(--text-light);font-weight:400">教师可管理所有学生实训账号</span></div>';
+html+='<div class="filter-bar"><input type="text" id="acctSearchInput" placeholder="搜索姓名/学号/用户名..."><button class="btn btn-secondary btn-sm" data-action="acct-clear-search">清除</button><span style="font-size:13px;color:var(--text-light)">'+( _acctSearch ? ('匹配 '+_total+' 个') : ('共 '+_total+' 个账号') )+'</span></div>';
 html+='<div class="table-wrap"><table><thead><tr><th>用户名</th><th>姓名</th><th>角色</th><th>学号</th><th>创建时间</th><th>创建数据</th><th>操作</th></tr></thead><tbody>';
 _pageUsers.forEach(function(u){var oc=DB.orders.filter(function(o){return o.createdBy===u.id}).length;var fc=DB.financeRecords.filter(function(f){return f.createdBy===u.id}).length;var gc=(DB.guides||[]).filter(function(g){return g.createdBy===u.id}).length;
 html+='<tr><td>'+esc(u.username)+'</td><td>'+esc(u.name)+'</td><td><span class="role-badge '+(u.role==='teacher'?'badge-teacher':'badge-student')+'">'+(u.role==='teacher'?'教师':'学生')+'</span></td><td>'+esc(u.studentId||'--')+'</td><td>'+esc(u.createdAt)+'</td><td>订单'+oc+'条/财务'+fc+'条/导游'+gc+'条</td><td>';
@@ -3744,12 +3749,16 @@ if(u.role==='student'){html+='<button class="btn btn-sm btn-secondary" data-acti
 html+='</td></tr>'});
 html+='</tbody></table></div></div>';
 html+=buildPager('acct-page',_total,PER,accountPage);
+if(_acctSearch&&_total===0)html+='<div class="empty" style="padding:18px 4px">未找到匹配的账号（可按姓名 / 学号 / 用户名搜索）</div>';
 html+='<div class="card" style="border:1px solid var(--danger);margin-top:16px"><div class="card-title">结业清班 <span style="font-size:12px;font-weight:400;color:var(--text-light);margin-left:8px">课程结束后清理全部学生</span></div>';
 html+='<div style="font-size:13px;color:var(--text-light);line-height:1.7;margin-bottom:12px">课程结束时，可一键<b style="color:var(--danger)">删除全部学生账号</b>，并清空这些学生创建的所有业务数据（订单、收付款、报销、发票、合同等）。<br>共享档案（供应商、导游、团期、财务基础档案、期初余额）将<b>保留</b>，便于下一期教学复用。</div>';
 html+='<button class="btn btn-danger btn-sm" data-action="fin-clear-students">'+ICONS.del+' 删除所有学生账号并清空其数据</button>';
 html+='</div>';
 
-$('pageContent').innerHTML=html}
+$('pageContent').innerHTML=html;
+if($('acctSearchInput'))$('acctSearchInput').value=_acctSearch;
+if(_wasSearch){var _si=$('acctSearchInput');if(_si){_si.focus();var _v=_si.value;try{_si.setSelectionRange(_v.length,_v.length)}catch(e){}}}
+}
 function resetPassword(id){
 var _ru=DB.users.find(function(x){return x.id===id});
 if(_ru&&(_ru.role==='teacher'||_ru.id==='u1'||_ru.username==='admin')){showToast('教师主账号为系统内置账号，禁止修改密码','error');return}
@@ -4324,6 +4333,7 @@ case'print-plan':window.print();break;
 case'reset-password':resetPassword(id);break;
 case'delete-account':deleteAccount(id);break;
 case'acct-page':accountPage=Math.max(1,parseInt(el.dataset.page,10)||1);renderAccount();break;
+case'acct-clear-search':_acctSearch='';accountPage=1;renderAccount();break;
 case'tour-filter':case'tour-search':renderTour();break;
 case'tour-sort':if(F_tour.sortBy!==el.dataset.sort){F_tour.sortBy=el.dataset.sort;F_tour.sortDir='asc'}else{F_tour.sortDir=F_tour.sortDir==='asc'?'desc':'asc'}F_tour.page=1;renderTour();break;
 case'tour-page':F_tour.page=Math.max(1,parseInt(el.dataset.page,10)||1);renderTour();break;
@@ -4600,6 +4610,7 @@ if(e.isComposing)return;
 var t=e.target;if(t.id==='tourFilter'||t.id==='tourSearch')renderTour();
 if(t.id==='supplierFilter'||t.id==='supplierSearch')renderSupplier();
   if(t.id==='guideFilter'||t.id==='guideSearch')renderGuide();
+  if(t.id==='acctSearchInput'){accountPage=1;renderAccount();}
   if(t.id==='finFilter'||t.id==='finSearch')renderFinance();
   if(t.id==='ledgerSearch')finModule();
   if(t.id==='finRptSearch'){FIN_RSEARCH=t.value;FIN_RPAGE[FIN_REPORT]=1;var _rbs=$('finReportBody');if(_rbs)_rbs.innerHTML=finReportBody();}
@@ -4616,6 +4627,7 @@ var t=e.target;if(!t||!t.id)return;
 if(t.id==='tourSearch')renderTour();
 else if(t.id==='supplierSearch')renderSupplier();
 else if(t.id==='guideSearch')renderGuide();
+else if(t.id==='acctSearchInput'){accountPage=1;renderAccount();}
 else if(t.id==='finSearch')renderFinance();
 else if(t.id==='ledgerSearch')finModule();
   else if(t.id==='paySearch')finModule();
