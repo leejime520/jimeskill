@@ -710,12 +710,17 @@ var SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 function createSB(baseUrl,key){
   var H={'apikey':key,'Authorization':'Bearer '+key,'Content-Type':'application/json'};
   function qb(table){
-    var st={table:table,method:'select',cols:'*',filters:[],single:false,body:null};
+    var st={table:table,method:'select',cols:'*',filters:[],single:false,body:null,order:null,limit:null,offset:null};
     function run(){
       var base=baseUrl.replace(/\/+$/,'')+'/rest/v1/'+st.table;
       var qs=[];
       if(st.method==='select')qs.push('select='+encodeURIComponent(st.cols));
       st.filters.forEach(function(f){qs.push(encodeURIComponent(f.col)+'='+f.op+'.'+encodeURIComponent(f.val))});
+      /* order/limit/offset：分页读取用。⚠️ PostgREST 默认 max-rows=1000，
+         不带 limit 的列表查询最多只回 1000 行——2026-10-21 "保存后团期消失"事故正因如此。 */
+      if(st.order)qs.push('order='+encodeURIComponent(st.order));
+      if(st.limit!=null)qs.push('limit='+encodeURIComponent(st.limit));
+      if(st.offset!=null)qs.push('offset='+encodeURIComponent(st.offset));
       var url=base+(qs.length?'?'+qs.join('&'):'');
       var opt={method:st.method==='select'?'GET':(st.method==='delete'?'DELETE':(st.method==='update'?'PATCH':'POST')),headers:Object.assign({},H)};
       if(st.method==='upsert'||st.method==='insert'){opt.headers['Prefer']='resolution=merge-duplicates';opt.body=JSON.stringify(Array.isArray(st.body)?st.body:[st.body])}
@@ -738,6 +743,10 @@ function createSB(baseUrl,key){
       delete:function(){st.method='delete';return b},
       eq:function(c,v){st.filters.push({col:c,op:'eq',val:v});return b},
       like:function(c,v){st.filters.push({col:c,op:'like',val:v});return b},
+      gt:function(c,v){st.filters.push({col:c,op:'gt',val:v});return b},
+      order:function(o){st.order=o;return b},
+      limit:function(n){st.limit=n;return b},
+      offset:function(n){st.offset=n;return b},
       maybeSingle:function(){st.single=true;return b},
       single:function(){st.single=true;return b},
       then:function(res,rej){return run().then(res,rej)}
@@ -749,6 +758,31 @@ function createSB(baseUrl,key){
 var SB_ID='shared';
 var SB=null;
 try{SB=createSB(SUPABASE_URL,SUPABASE_ANON_KEY)}catch(e){console.warn('Supabase 初始化失败',e)}
+/* ---------- 全量分页读取（2026-10-21，修复"保存后团期消失"）----------
+   PostgREST 默认 max-rows=1000：任何不带 limit 的列表查询最多只返回前 1000 行。
+   2026-10-21 事故：shr_* 行总数突破 1000 后，字典序排在后面的记录永远加载不到
+   （tourGroups 的 id 排在 suppliers/guides/财务基础档之后，首当其冲）：
+   学生保存团期 → 400ms 后自动回拉云端 → 回拉结果里没有这行 → 内存被云端快照整体替换
+   → 刚录的团期当场消失，且此后任何人都不可能再看到它。
+   修复：所有列表查询统一走本函数，按 id 升序做 keyset 分页（gt 上一页最后一个 id），
+   稳定拿全量；keyset 方式在并发插入下不会重复、不会漏页。 */
+var _PAGE_SIZE=1000;
+async function fetchAllRows(cols,likeVal){
+  var out=[],after=null,_guard=0;
+  for(;;){
+    if(++_guard>500)break;   /* 防御死循环：正常一个表不可能超过 50 万行 */
+    var q=SB.from('app_state').select(cols).order('id.asc').limit(_PAGE_SIZE);
+    if(likeVal)q=q.like('id',likeVal);
+    if(after)q=q.gt('id',after);
+    var r=await q;
+    if(r.error)throw r.error;
+    var rows=r.data||[];
+    for(var i=0;i<rows.length;i++)out.push(rows[i]);
+    if(rows.length<_PAGE_SIZE)break;
+    after=rows[rows.length-1].id;
+  }
+  return out;
+}
 var SESSION_KEY='wb_tour_session';
 var ICONS={
 dashboard:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
@@ -963,7 +997,7 @@ async function loadAllAccounts(legacyUsers,banned){
     if(!map[u.id])map[u.id]=u;
   }
   if(SB){
-    try{var r=await SB.from('app_state').select('id,data').like('id','acct_%');(r.data||[]).forEach(function(x){if(x&&x.data)add(x.data)})}catch(e){console.warn('云端账号读取失败',e)}
+    try{var _arows=await fetchAllRows('id,data','acct_%');_arows.forEach(function(x){if(x&&x.data)add(x.data)})}catch(e){console.warn('云端账号读取失败',e)}
   }
   /* ⚠ 本机回退已永久移除（2026-09-16）：账号只认云端 acct_ 行。
      以前这里会在"云端读不到账号"时把本机 localStorage 的 acct_ 残留加载进来，
@@ -1018,9 +1052,10 @@ async function loadData(){
   var _shrCount=0;
   if(SB){
     try{
-      var _sr=await SB.from('app_state').select('id,data').like('id','shr_%');
-      if(_sr.error){_cloudReadErr=_errText(_sr.error);return null}
-      (_sr.data||[]).forEach(function(x){
+      /* ⚠️ 必须分页拉全量（2026-10-21）：shr_* 行已超 1000，单次查询会被 PostgREST
+         截断，tourGroups 等排在后面的字段整批加载不到 → 保存后回拉即消失。 */
+      var _srows=await fetchAllRows('id,data','shr_%');
+      _srows.forEach(function(x){
         var _dd=x.data||{};var _t=_dd.type;var _rec=_dd.rec||_dd;
         if(!_t||SHARED_ARRAY_FIELDS.indexOf(_t)<0)return;
         d[_t].push(_rec);_shrCount++;
@@ -1044,9 +1079,9 @@ async function loadData(){
   if(currentUser&&currentUser.role==='teacher'){
     if(SB){
       try{
-        var r=await SB.from('app_state').select('id,data').like('id','user_%');
-        if(r.error){_cloudReadErr=_errText(r.error);return null}
-        (r.data||[]).forEach(function(x){
+        /* 同上：教师聚合全部学生私有行，也必须分页拉全量（学生数上行后 user_% 同样会超 1000） */
+        var _urows=await fetchAllRows('id,data','user_%');
+        _urows.forEach(function(x){
           collect(x.data||{});
           /* 同上：把读到的每行内容记为"已同步"基准，避免下次保存把 96 个学生行全重发一遍 */
           try{_rowSig[x.id]=_sigOf(x.data||{})}catch(e){}
@@ -1330,16 +1365,24 @@ function runCloudDiag(){
       return SB.from('app_state').select('data').eq('id','shared').maybeSingle().then(function(r){return {err:r.error?(_errText(r.error)):null,len:r.data?JSON.stringify(r.data).length:0,has:!!(r.data&&r.data.data)}});
     }),
     timed('T5 读取全部 user_ 业务行',function(){
-      return SB.from('app_state').select('id,data').like('id','user_%').then(function(r){return {err:r.error?_errText(r.error):null,n:(r.data||[]).length,len:JSON.stringify(r.data||[]).length}});
+      return fetchAllRows('id,data','user_%').then(function(rows){return {err:null,n:rows.length,len:JSON.stringify(rows).length}},function(e){return {err:_errText(e),n:0,len:0}});
     }),
     timed('T6 读取全部 acct_ 账号行',function(){
-      return SB.from('app_state').select('id,data').like('id','acct_%').then(function(r){return {err:r.error?_errText(r.error):null,n:(r.data||[]).length,len:JSON.stringify(r.data||[]).length}});
+      return fetchAllRows('id,data','acct_%').then(function(rows){return {err:null,n:rows.length,len:JSON.stringify(rows).length}},function(e){return {err:_errText(e),n:0,len:0}});
     }),
     timed('T7 写入探针行（测写权限，会自动删除）',function(){
       return upsertCloudRowAsync('__diag__',{t:Date.now()}).then(function(){deleteCloudRow('__diag__');return {ok:true}},function(e){return {err:_errText(e)}});
     }),
     timed('T8 完整 loadData()（平台真正的数据加载）',function(){
-      return loadData().then(function(d){return {ok:!!d,err:_cloudReadErr||null,n:d?Object.keys(d).length:0}},function(e){return {err:_errText(e)}});
+      /* ⚠️ loadData() 会顺手改写 _loadedRecIds / _rowSig——这两个是 saveData 的
+         "删除判定基准"（云端有、内存无 → 删行）。诊断探针只读不写，绝不能让基准
+         变成云端快照：否则探针跑完后的任何一次保存，都会把"内存里没有、云端有"的
+         记录（别人刚新增的、或自己还没加载进来的）当成已删除批量删掉。
+         2026-10-21 发现此隐患，故：探针前快照、探针后原样还原（含本机签名持久化）。 */
+      var _snapRec=JSON.parse(JSON.stringify(_loadedRecIds||{}));
+      var _snapSig=Object.assign({},_rowSig||{});
+      function _restore(){try{for(var _k in _loadedRecIds)delete _loadedRecIds[_k];Object.assign(_loadedRecIds,_snapRec);for(var _k2 in _rowSig)delete _rowSig[_k2];Object.assign(_rowSig,_snapSig);_saveRowSig()}catch(e){}}
+      return loadData().then(function(d){_restore();return {ok:!!d,err:_cloudReadErr||null,n:d?Object.keys(d).length:0}},function(e){_restore();return {err:_errText(e)}});
     })
   ];
   function judgeT(i,v){
@@ -1525,12 +1568,13 @@ function _scheduleViewRefresh(){
   },400);
 }
 /* 轻量变更探测：只取 id+updated_at（极小 payload），发现真的变了才拉全量。
-   替代原"每 15 秒全量覆盖内存"——既不盲拉大包，也能看到他人改动。 */
+   替代原"每 15 秒全量覆盖内存"——既不盲拉大包，也能看到他人改动。
+   ⚠️ 2026-10-21：此查询原先不带 limit，被 PostgREST 截断在 1000 行，
+      排在后面的行（shr_tourGroups_* 等）被改了也探测不到 → 他人新存的团期永远不同步。
+      现统一走 fetchAllRows 分页拿全量。 */
 function cloudStampCheck(){
   if(!SB)return;
-  SB.from('app_state').select('id,updated_at').then(function(r){
-    if(r.error){_cloudOffline=true;_cloudErrText=_errText(r.error);setCloudState(false);return}
-    var rows=r.data||[];
+  fetchAllRows('id,updated_at',null).then(function(rows){
     var sig=rows.map(function(x){return x.id+':'+(x.updated_at||'')}).sort().join('|');
     if(sig===_lastCloudStamp)return;
     var first=(_lastCloudStamp==='');
@@ -4536,9 +4580,9 @@ var REG_USERNAME_HINT='仅限英文字母和数字，且必须以英文字母开
 async function refreshAccountsForRegister(){
   if(!SB)return;
   try{
-    var r=await SB.from('app_state').select('id,data').like('id','acct_%');
+    var _regrows=await fetchAllRows('id,data','acct_%');
     if(!DB.users||!Array.isArray(DB.users))DB.users=[];
-    ((r&&r.data)||[]).forEach(function(x){
+    _regrows.forEach(function(x){
       var u=x&&x.data;if(!u||!u.id)return;
       if(u.updated_at){u=Object.assign({},u);delete u.updated_at}
       var ex=null;DB.users.forEach(function(y){if(y&&y.id===u.id)ex=y});
