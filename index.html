@@ -408,6 +408,11 @@ textarea:focus{border-color:var(--primary)}
 .team-confirm .fee-text li{line-height:1.95;margin:2px 0}
 .team-confirm .fee-text .strong{font-weight:700}
 .team-confirm .fee-text .money{font-weight:700;font-family:"宋体",SimSun,serif}
+/* 合同第三部分费用摘要：应收/已收/未付 三笔金额（2026-10-26 精简，替代原收款/退款明细列表） */
+.team-confirm .fee-text .fee-summary{margin:10px 0 12px 0}
+.team-confirm .fee-text .fee-summary th{background:#fafbfc;width:110px;text-align:center}
+.team-confirm .fee-text .fee-summary td{line-height:1.8}
+.team-confirm .fee-text .fee-note{font-size:12px;font-weight:400;color:var(--text-light);font-family:inherit}
 /* 合同第三~第七章：标题顶格、正文首行缩进2字符 */
 .team-confirm .tc-block-head{text-indent:0}
 .team-confirm .tc-block-body.full p{text-indent:2em}
@@ -765,20 +770,31 @@ try{SB=createSB(SUPABASE_URL,SUPABASE_ANON_KEY)}catch(e){console.warn('Supabase 
    学生保存团期 → 400ms 后自动回拉云端 → 回拉结果里没有这行 → 内存被云端快照整体替换
    → 刚录的团期当场消失，且此后任何人都不可能再看到它。
    修复：所有列表查询统一走本函数，按 id 升序做 keyset 分页（gt 上一页最后一个 id），
-   稳定拿全量；keyset 方式在并发插入下不会重复、不会漏页。 */
-var _PAGE_SIZE=1000;
+   稳定拿全量；keyset 方式在并发插入下不会重复、不会漏页。
+   单页上限 _PAGE_SIZE=5000（2026-10-21 应用户要求由 1000 上调）：
+   ⚠️ 若 Supabase 服务端 max-rows 仍是 1000，本页会被服务端静默截回 1000 行，
+     所以【绝不能】用"不足一页就结束"来判断读完——那会重新漏掉 1000 行之后的数据。
+     结束条件只认"返回 0 行"；同时探测服务端实际上限，超限报错时自动降档重试。 */
+var _PAGE_SIZE=5000;
+var _srvMaxRows=0;      /* 服务端实际单页上限，0=未知（按 _PAGE_SIZE 请求） */
 async function fetchAllRows(cols,likeVal){
   var out=[],after=null,_guard=0;
   for(;;){
-    if(++_guard>500)break;   /* 防御死循环：正常一个表不可能超过 50 万行 */
-    var q=SB.from('app_state').select(cols).order('id.asc').limit(_PAGE_SIZE);
+    if(++_guard>500)break;   /* 防御死循环：正常一个表不可能超过 250 万行 */
+    var sz=_PAGE_SIZE;
+    if(_srvMaxRows>0&&sz>_srvMaxRows)sz=_srvMaxRows;
+    var q=SB.from('app_state').select(cols).order('id.asc').limit(sz);
     if(likeVal)q=q.like('id',likeVal);
     if(after)q=q.gt('id',after);
     var r=await q;
-    if(r.error)throw r.error;
+    if(r.error){
+      /* 服务端可能拒绝超过 max-rows 的 limit：降到 1000 再试一次，仍失败才上报 */
+      if(sz>1000){_srvMaxRows=1000;continue}
+      throw r.error;
+    }
     var rows=r.data||[];
     for(var i=0;i<rows.length;i++)out.push(rows[i]);
-    if(rows.length<_PAGE_SIZE)break;
+    if(rows.length===0)break;      /* 只有拿到 0 行才算真的读完（防服务端截断） */
     after=rows[rows.length-1].id;
   }
   return out;
@@ -2146,8 +2162,7 @@ var _lk=(DB.orders||[]).filter(function(o){return o.tourGroupId===t.id});
 var _col=_lk.reduce(function(s,o){return s+(parseInt(o.pax)||0)},0);
 var _cap=parseInt(t.maxPax)||0;var _rm=_cap-_col;
 var _rb=t.recruitClosed?'<span class="badge badge-red">收客已结束</span>':(_cap>0&&_rm<=0?'<span class="badge badge-amber">已满位 '+_col+'/'+_cap+'</span>':'<span class="badge badge-green">已收'+_col+'人 · 余'+_rm+'位</span>');
-var _rbtn=t.recruitClosed?'<button class="btn-icon" data-action="reopen-recruit" data-id="'+t.id+'" title="重新开启收客">'+ICONS.unlock+'</button>':'<button class="btn-icon btn-icon-danger" data-action="close-recruit" data-id="'+t.id+'" title="结束收客">'+ICONS.lock+'</button>';
-html+='<tr><td>'+esc(t.tourNo)+'</td><td>'+esc(t.routeName)+'</td><td>'+esc(fmtDateCn(t.departureDate)||'--')+'</td><td>'+esc(fmtDateCn(t.sendOffTime)||'--')+'</td><td>'+esc(t.duration)+'天</td><td>'+fmtMoney(t.price)+'</td><td>'+esc(t.maxPax)+'人</td><td>'+_rb+'</td><td>'+tourStatusBadge(t)+'</td><td>'+esc(getGuideName(t.guideId))+'</td><td>'+_rbtn+'<button class="btn-icon" data-action="view-tour" data-id="'+t.id+'" title="详情">'+ICONS.eye+'</button>'+(canEditArchive(t)?'<button class="btn-icon" data-action="edit-tour" data-id="'+t.id+'" title="编辑">'+ICONS.edit+'</button><button class="btn-icon" data-action="delete-tour" data-id="'+t.id+'" title="删除">'+ICONS.del+'</button>':'')+'</td></tr>'});
+html+='<tr><td>'+esc(t.tourNo)+'</td><td>'+esc(t.routeName)+'</td><td>'+esc(fmtDateCn(t.departureDate)||'--')+'</td><td>'+esc(fmtDateCn(t.sendOffTime)||'--')+'</td><td>'+esc(t.duration)+'天</td><td>'+fmtMoney(t.price)+'</td><td>'+esc(t.maxPax)+'人</td><td>'+_rb+'</td><td>'+tourStatusBadge(t)+'</td><td>'+esc(getGuideName(t.guideId))+'</td><td>'+'<button class="btn-icon" data-action="view-tour" data-id="'+t.id+'" title="详情">'+ICONS.eye+'</button>'+(canEditArchive(t)?'<button class="btn-icon" data-action="edit-tour" data-id="'+t.id+'" title="编辑">'+ICONS.edit+'</button><button class="btn-icon" data-action="delete-tour" data-id="'+t.id+'" title="删除">'+ICONS.del+'</button>':'')+'</td></tr>'});
 html+='</tbody></table></div>';
 html+=buildPager('tour-page',_total,_per,F_tour.page);}
 $('pageContent').innerHTML=html;
@@ -2301,8 +2316,7 @@ linkedOrders.forEach(function(o){html+='<tr><td>'+esc(o.orderNo)+'</td><td>'+esc
 html+='</tbody></table></div></div>'}
 var _footer='';
 var _isT=currentUser&&currentUser.role==='teacher';
-if(t.recruitClosed){_footer+='<button class="btn btn-primary" data-action="generate-plan" data-id="'+t.id+'">'+ICONS.doc+' 生成出团计划书</button>'+(_isT?'<button class="btn btn-secondary" data-action="reopen-recruit" data-id="'+t.id+'" data-src="detail">'+ICONS.unlock+' 重新开启收客</button>':'')}
-else{if(_isT)_footer+='<button class="btn btn-danger" data-action="close-recruit" data-id="'+t.id+'" data-src="detail">'+ICONS.lock+' 结束收客</button>'}
+if(t.recruitClosed){_footer+='<button class="btn btn-primary" data-action="generate-plan" data-id="'+t.id+'">'+ICONS.doc+' 生成出团计划书</button>'}
 _footer+='<button class="btn btn-secondary" data-action="close-modal">关闭</button>';
 openModal('团期详情',html,_footer,true)}
 /* Supplier Management */
@@ -3821,7 +3835,7 @@ showConfirm('确定删除该学生账号及其所有数据？此操作不可恢�
 /* Tour Plan Generation */
 function generateTourPlan(tourId){
 var tg=getTourGroup(tourId);if(!tg){showToast('团期不存在','error');return}
-var linked=DB.orders.filter(function(o){return o.tourGroupId===tourId});
+var linked=DB.orders.filter(function(o){return o.tourGroupId===tourId && o.status!=='已取消'});
 var totalPax=linked.reduce(function(s,o){return s+(parseInt(o.pax)||0)},0);if(totalPax<=0)totalPax=1;
 var allMembers=[];linked.forEach(function(o){(o.teamMembers||[]).forEach(function(m){allMembers.push(Object.assign({},m,{_oid:o.id}))})});
 var days=tg.duration||(tg.itinerary?tg.itinerary.length:1)||1;
@@ -4068,6 +4082,9 @@ if(F_contract.status!==cPrev.s||F_contract.search!==cPrev.k||F_contract.dateStar
 var wasSearch=document.activeElement&&document.activeElement.id==='contractSearch';
 var orders=getVisibleData('orders');
 var receipts=getVisibleData('finReceipts');
+/* 已退金额按订单预汇总：合同侧「已收」必须扣减退款（与财务 finNetIncome 同口径）。
+   2026-10-26 修复：此前只累加收款单、从不减退款，导致退款后合同金额不更新。 */
+var _rfMap={};getVisibleData('finRefunds').forEach(function(r){if(r.status==='已退'&&r.orderId)_rfMap[r.orderId]=Math.round(((_rfMap[r.orderId]||0)+(r.amount||0))*100)/100});
 var quals=orders.filter(function(o){return receipts.some(function(r){return r.orderId===o.id&&r.status==='已收'})});
 quals.sort(function(a,b){return (b.createdAt||'').localeCompare(a.createdAt||'')});
 var contracts=getVisibleData('contracts');
@@ -4092,7 +4109,8 @@ _pg.forEach(function(o){
 var c=contracts.find(function(x){return x.orderId===o.id&&x.status!=='已作废'});var cVoid=contracts.find(function(x){return x.orderId===o.id&&x.status==='已作废'});
 finSyncOrder(o);
 var recs=receipts.filter(function(r){return r.orderId===o.id&&r.status==='已收'});
-var rec=recs.reduce(function(s,r){return s+(parseFloat(r.amount)||0)},0);
+var _rf=_rfMap[o.id]||0;
+var rec=Math.round((recs.reduce(function(s,r){return s+(parseFloat(r.amount)||0)},0)-_rf)*100)/100;
 html+='<tr>';
 html+='<td>'+esc(o.orderNo)+'</td>';
 html+='<td>'+esc(o.customerName)+'</td>';
@@ -4100,7 +4118,7 @@ html+='<td>'+esc(getTourRouteName(o.tourGroupId))+'</td>';
 html+='<td>'+esc(o.departureDate)+'</td>';
 html+='<td>'+esc(o.pax)+'</td>';
 html+='<td>'+finMoney(o.finReceivable||0)+'</td>';
-html+='<td>'+finMoney(rec,'var(--success)')+'</td>';
+html+='<td>'+finMoney(rec,'var(--success)')+(_rf>0?('<div style="font-size:12px;color:var(--danger);margin-top:2px">已退 '+fmtMoney(_rf)+'</div>'):'')+'</td>';
 html+='<td>'+(c?statusBadge('已签约'):(cVoid?statusBadge('已作废'):statusBadge('未签约')))+'</td>';
 html+='<td>'+(c?esc(c.contractNo):'<span style="color:var(--text-light)">—</span>')+'</td>';
 html+='<td style="white-space:nowrap">';
@@ -4126,13 +4144,18 @@ if(currentUser.role!=='teacher'&&o.createdBy!==currentUser.id){showToast('无权
 var exist=DB.contracts.find(function(x){return x.orderId===orderId&&x.status!=='已作废'});
 var _b=getBoundAgency();
 var _recs=DB.finReceipts.filter(function(r){return r.orderId===orderId&&r.status==='已收'});
-var _rec=_recs.reduce(function(s,r){return s+(parseFloat(r.amount)||0)},0);
+var _recGross=_recs.reduce(function(s,r){return s+(parseFloat(r.amount)||0)},0);
+/* 已收金额按净额展示（已扣退款）：退款不构成真实收入，与财务 finNetIncome 同口径 */
+var _rf=finRefundAmt(o);
+var _rec=Math.round((_recGross-_rf)*100)/100;
 var _receiv=finOrderReceivable(o);
+var _due=Math.max(0,Math.round((_receiv-_rec)*100)/100);
 var _cn='HT'+(o.orderNo||'').replace(/^ORD/,'');
 var body='<div class="sign-form">'
 +'<div class="form-row"><div class="form-group"><label>订单编号</label><div class="sf-val">'+esc(o.orderNo)+'</div></div><div class="form-group"><label>客户姓名（甲方）</label><div class="sf-val">'+esc(o.customerName)+'</div></div></div>'
 +'<div class="form-row"><div class="form-group"><label>线路</label><div class="sf-val">'+esc(getTourRouteName(o.tourGroupId)||'—')+'</div></div><div class="form-group"><label>出发日期</label><div class="sf-val">'+esc(o.departureDate||'—')+'</div></div></div>'
-+'<div class="form-row"><div class="form-group"><label>旅游费用（应收）</label><div class="sf-val">'+fmtMoney(_receiv)+'</div></div><div class="form-group"><label>已收金额</label><div class="sf-val">'+fmtMoney(_rec)+'</div></div></div>'
++'<div class="form-row"><div class="form-group"><label>旅游费用（应收）</label><div class="sf-val">'+fmtMoney(_receiv)+'</div></div><div class="form-group"><label>已收金额（已扣退款）</label><div class="sf-val">'+fmtMoney(_rec)+'</div></div></div>'
++'<div class="form-row"><div class="form-group"><label>已退款</label><div class="sf-val" style="color:var(--danger)">'+fmtMoney(_rf)+'</div></div><div class="form-group"><label>尚欠金额</label><div class="sf-val">'+fmtMoney(_due)+'</div></div></div>'
 +'<div class="form-row"><div class="form-group"><label>乙方（旅行社）</label><div class="sf-val">'+esc(_b?_b.name:AGENCY_NAME)+'</div></div><div class="form-group"><label>合同编号</label><div class="sf-val">'+esc(_cn)+'</div></div></div>'
 +'<div class="form-row"><div class="form-group"><label>签署日期</label><div class="sf-val">'+esc(today())+'</div></div><div class="form-group"><label>合同状态</label><div class="sf-val">'+(exist?'<span style="color:var(--success)">已签署（'+esc(exist.contractNo)+'）</span>':'<span style="color:var(--text-light)">待签署</span>')+'</div></div></div>'
 +'</div>';
@@ -4204,8 +4227,13 @@ var pax=o.pax||0;
 var unit=parseFloat(tg?tg.price:0)||0;
 var receivable=unit*pax;
 var receipts=getVisibleData('finReceipts').filter(function(r){return r.orderId===o.id&&r.status==='已收'});
-var received=receipts.reduce(function(s,r){return s+(parseFloat(r.amount)||0)},0);
-var due=receivable-received;
+/* 退款必须参与合同金额计算：净实收 = 已收 − 已退（与财务 finNetIncome 同口径）。
+   2026-10-26 修复：此前合同正文只累加收款单，退款后「已收到金额/尚欠」不更新。 */
+var refunds=getVisibleData('finRefunds').filter(function(r){return r.orderId===o.id&&r.status==='已退'});
+var refundAmt=Math.round(refunds.reduce(function(s,r){return s+(parseFloat(r.amount)||0)},0)*100)/100;
+var _gross=receipts.reduce(function(s,r){return s+(parseFloat(r.amount)||0)},0);
+var received=Math.round((_gross-refundAmt)*100)/100;
+var due=Math.round((receivable-received)*100)/100;
 var html='<div class="team-confirm">';
 html+='<h1 class="tc-title">团队境内旅游合同</h1>';
 
@@ -4224,18 +4252,19 @@ html+='</div></div>';
 html+='<div class="tc-block allow-break"><div class="tc-block-head">三、旅游费用</div><div class="tc-block-body full"><div class="fee-text">';
 html+='<p>甲、乙双方确认，本次旅游费用按以下标准计收：</p>';
 html+='<p>旅游线路“'+esc(routeName)+'”参团费用标准为每人人民币 '+unit.toFixed(2)+' 元。甲方（旅游者 '+esc(c.partyA||o.customerName)+'）本次参团 '+pax+' 人，旅游团费总额为人民币 '+rmbUpper(receivable)+'（小写：¥'+receivable.toFixed(2)+'）。</p>';
-if(receipts.length){
-  html+='<p>截至本合同签署之日，乙方已收到甲方支付的旅游费用共计人民币 '+received.toFixed(2)+' 元，具体收款明细如下：</p>';
-  html+='<ol>';
-  receipts.forEach(function(r){html+='<li>'+fmtDateCn(r.date||'')+'　'+esc(r.kind||'')+(r.method?('（'+esc(r.method)+'）'):'')+'：¥'+(parseFloat(r.amount)||0).toFixed(2)+'</li>'});
-  html+='</ol>';
-  if(due>0){
-    html+='<p>尚欠旅游团费人民币 '+rmbUpper(due)+'（小写：¥'+due.toFixed(2)+'），甲方应于团队出发前一次性结清。</p>';
-  }else{
-    html+='<p>上述旅游团费已全部收讫。</p>';
-  }
+/* 2026-10-26：按教师要求，费用条款只列「应收/已收/未付」三笔金额，不再罗列收款、退款明细。
+   已收为净额（毛收 − 已退），与财务 finNetIncome 同口径；有退款时以括号注明扣除金额。 */
+html+='<table class="tc-table fee-summary"><tbody>'
++'<tr><th style="width:120px">应收款项</th><td>人民币 <span class="money">'+rmbUpper(receivable)+'</span>（小写：¥<span class="money">'+receivable.toFixed(2)+'</span>）</td></tr>'
++'<tr><th>已收款项</th><td>人民币 <span class="money">'+rmbUpper(received)+'</span>（小写：¥<span class="money">'+received.toFixed(2)+'</span>）'+(refundAmt>0?('　<span class="fee-note">（已扣除退款 '+refundAmt.toFixed(2)+' 元）</span>'):'')+'</td></tr>'
++'<tr><th>未付款项</th><td>人民币 <span class="money">'+rmbUpper(due)+'</span>（小写：¥<span class="money">'+due.toFixed(2)+'</span>）</td></tr>'
++'</tbody></table>';
+if(o.status==='已取消'){
+  html+='<p>因甲方已提出退团，本合同项下旅游服务未实际发生，相关款项已按退团流程结清，本合同同时作废。</p>';
+}else if(due>0.01){
+  html+='<p>未付款项甲方应于团队出发前一次性结清。</p>';
 }else{
-  html+='<p>甲方应于团队出发前一次性结清上述旅游团费。</p>';
+  html+='<p>上述旅游团费已全部收讫。</p>';
 }
 html+='</div></div></div>';
 html+='<div class="tc-block allow-break"><div class="tc-block-head">四、费用包含与不含</div><div class="tc-block-body full">';
